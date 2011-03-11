@@ -28,198 +28,10 @@ SONG_DIR = join(THIS_DIR, "cache")
 
 
 
-def start_jukebox(account):
-    def loop():
-        next_song_preloaded = False
-        
-        while True:            
-            stats = _pandora.stats()
-            if stats:
-                total, pos = stats
-                    
-                if pos == total and account.current_station:
-                    logging.info("song done! playing next song")
-                    account.current_station.play(block=True)
-                    next_song_preloaded = False
-                    
-                elif pos + 30 >= total and not next_song_preloaded:
-                    logging.info("preloading next song")
-                    account.current_station.preload_next(block=True)
-                    logging.info("done preloading next song")
-                    next_song_preloaded = True
-                    
-            time.sleep(1)
-    eventlet.spawn_n(loop)
 
 
 
-class Bot(object):
-    color_mapping = ("black", "navy_blue", "green", "red", "brown", "purple",
-        "olive", "yellow", "lime_green", "teal", "aqua_light", "royal_blue",
-        "hot_pink", "dark_gray", "light_gray", "white")
-    
-    def __init__(self, server, port, pandora_account):
-        self.account = pandora_account
-        self.server = server
-        self.port = port
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.room = None
-        self._gt = None
-        
-        self.state = {
-            "mode": None,
-        }
-        
-    def cmd(self, cmd, *args):
-        args = " ".join(args)
-        if args: args = " "+args
-        cmd = "%s%s\n" % (cmd.upper(), args)
-        logging.info("running %s" % cmd.strip())
-        self.sock.send(cmd)
-        
-    def connect(self, nick, pw=None):
-        self.sock.connect((self.server, self.port))
 
-        self.nick = nick
-        self.cmd("nick", nick)
-        self.cmd("user", nick, nick, nick, ":Python IRC")
-        if pw: self.cmd("msg", "NickServ", "identify", pw)
-        
-        self.cmd("mode", nick, "+R")
-        
-    def join(self, room):
-        self.room = room
-        self.cmd("join", room)
-        
-    def send(self, target, msg):
-        logging.info("Sending IRC message \"%s\" to %s" % (msg, target))
-        
-        truncate_limit = 400
-        while len(msg) > truncate_limit:
-            self.cmd("PRIVMSG", target, ":"+msg[:truncate_limit])
-            msg = msg[truncate_limit:]
-            
-        self.cmd("PRIVMSG", target, ":"+msg)
-        
-    def pong(self, server):
-        logging.info("ponging %s" % server)
-        self.cmd("PONG", ":"+server)
-        
-    def stop(self):
-        self._gt.kill()
-    
-    def start(self):
-        #simple_commands = ("faster", "slower", "next", "pause", "play", "unpause")
-        
-        def print_loop():
-            while True:
-                msg = unicode(self.account.friendly_print_channel.get())
-                msg = unicodedata.normalize('NFKD', msg).encode('ascii','ignore')
-                self.send(self.room, msg)
-        
-        def irc_loop():
-            while True:
-                data = self.sock.recv(4096)
-                if not data: return
-                
-                for line in data.split("\r\n"):
-                    if "PING" in line:
-                        m = re.match("PING :(?P<server>.+)", line.strip())
-                        if m:
-                            server = m.group("server")
-                            logging.info("received ping from %s" % server)
-                            self.pong(server)
-                        
-                    elif "PRIVMSG" in line:
-                        m = re.match(":(?P<user>.+?)!.+? PRIVMSG (?P<dest>.+?) :(?P<msg>.+)", line.strip())
-                        if not m: continue
-                        
-                        send = None
-                        send_target = None
-                        
-                        directed = False # to us?
-                        private = False
-                        target = None
-                        msg = m.group("msg").strip()
-                        user = m.group("user")
-                        
-                        if msg.startswith(self.nick):
-                            directed = True
-                            # strip nick and punctuation from front of msg
-                            msg = re.sub("^%s\s*\W*\s*" % self.nick, "", msg)
-                            
-                        logging.info("Received \"%s\" from %s" % (msg, user))
-                            
-                        if m.group("dest") == self.nick:
-                            private = True
-                            directed = True
-                            target = m.group("dest")
-                        else: target = m.group("dest")
-                        
-                        if not directed: continue
-                        
-                        # who to send the message to
-                        if private: send_target = user
-                        else: send_target = target
-                        
-                        normalized_msg = msg.lower().strip()
-                        
-                        if private and user == "amoffat" and normalized_msg == "quit":
-                            self.account.logout()
-                            return
-                        elif normalized_msg == "stations":
-                            send = []
-                            for i, station in self.account.stations.iteritems():
-                                send.append("[%d: %s]" % (i, station.name))
-                            send = ", ".join(send)
-                            
-                            self.state["mode"] = "station_select"
-                            
-                        elif normalized_msg == "next":
-                            self.account.current_station.next()
-                            
-                        elif normalized_msg == "like":
-                            self.account.current_song.like()
-                            
-                        elif normalized_msg.startswith("volume"):
-                            m = re.search("volume\s+(\d+)%?", normalized_msg)
-                            if m:
-                                volume = int(m.group(1))
-                                _pandora.set_volume(volume / 100.0)
-                                send = "setting volume to %d%%" % volume
-                            
-                        elif normalized_msg in ("hate", "dislike"):
-                            self.account.current_song.dislike()
-                            
-                        elif normalized_msg.startswith("speed"):
-                            m = re.search("speed\s+(\d+)%?", normalized_msg)
-                            if m:
-                                speed = int(m.group(1))
-                                _pandora.set_speed(speed / 100.0)
-                                send = "setting speed to %d%%" % speed
-                            
-                        elif normalized_msg == "pause":
-                            self.account.current_song.pause()
-                            
-                        elif normalized_msg == "song":
-                            send = str(self.account.current_song)
-                            
-                        elif normalized_msg.isdigit():
-                            i = int(normalized_msg)
-                            station = self.account.stations.get(i, None)
-                            if not station:
-                                send = "station not found!"
-                            else:
-                                _pandora.stop()
-                                self.station = station
-                                self.station.play()
-                                send = "loading %s..." % self.station.name
-                            
-                        if send and send_target: self.send(send_target, send)
-                            
-        self._gt = eventlet.spawn(irc_loop)
-        eventlet.spawn_n(print_loop)
-        self._gt.wait()
                         
     
 
@@ -344,19 +156,24 @@ class Connection(object):
 
 class Account(object):
     def __init__(self, email, password):
-        self.friendly_print_channel = eventlet.Queue()
         self.connection = Connection()        
         self.email = email
         self.password = password
         self.cookie = None
         self._stations = {}
-        
-        start_jukebox(self)
+        self._message_subscribers = {}
         
         self.current_station = None
         self.current_song = None
 
         self.login()
+        
+    def publish_message(self, msg):
+        for name, subscriber in self._message_subscribers.iteritems():
+            subscriber(msg)
+    
+    def subscribe_to_messages(self, name, subscriber):
+        self._message_subscribers[name] = subscriber
 
     def login(self):
         self.connection.sync()
@@ -405,8 +222,8 @@ class Station(object):
         self._loaded = eventlet.event.Event()
         self._playlist = deque()
         
-    def send_irc(self, msg):
-        self.account.friendly_print_channel.put(msg)
+    def publish_message(self, msg):
+        self.account.publish_message(msg)
 
     def play(self, block=False):
         self.current_song = self.playlist.popleft()
@@ -428,7 +245,7 @@ class Station(object):
 
     def next(self):
         #if self.account._queued_song: self.account._queued_song.cancel()
-        self.send_irc("changing song...")
+        self.publish_message("changing song...")
         _pandora.stop()
         self.play()
 
@@ -475,6 +292,7 @@ class Station(object):
 
 
 class Song(object):
+    _download_lock = eventlet.semaphore.Semaphore()
 
     def __init__(self, station, songTitle, artistSummary, audioURL, fileGain, userSeed, musicId, **kwargs):
         self.station = station
@@ -498,7 +316,6 @@ class Song(object):
         
         self.offset_events = None
 
-        self._download_lock = eventlet.semaphore.Semaphore()
         self.started = None
         self.stopped = None
         self.paused = False
@@ -519,8 +336,8 @@ class Song(object):
         if block: self._download()
         else: eventlet.spawn_n(self._download)
         
-    def send_irc(self, msg):
-        self.station.account.friendly_print_channel.put(msg)
+    def publish_message(self, msg):
+        self.station.account.publish_message(msg)
 
     def _download(self):
         self._download_lock.acquire()
@@ -558,12 +375,21 @@ class Song(object):
             self.paused = False
             return
         
-        def load():
+        def load_and_play():
             self.length = _pandora.play(self._download())
-            self.send_irc("playing %s" % self)
+            self.publish_message("playing %s" % self)
             
-        if block: load()
-        else: eventlet.spawn_n(load)
+            while True:            
+                stats = _pandora.stats()
+                if stats:
+                    total, pos = stats
+                    if pos == total and account.current_station: break
+                        
+                time.sleep(1)
+            self.publish_message("finished playing %s" % self)
+            
+        if block: load_and_play()
+        else: eventlet.spawn_n(load_and_play)
         
     def stop(self):
         _pandora.stop()
@@ -594,12 +420,12 @@ class Song(object):
         xml = conn.send(get, body)
         
     def like(self):
-        self.send_irc("liking %s" % self)
+        self.publish_message("liking %s" % self)
         self._add_feedback(like=True)
 
     def dislike(self):
         _pandora.stop()
-        self.send_irc("disliking %s" % self)
+        self.publish_message("disliking %s" % self)
         self._add_feedback(like=False)
         self.station.next()
 
@@ -616,12 +442,5 @@ class Song(object):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    
-    account = Account("pandora@medtelligent.com", "219WChicago")
-    
-    bot = Bot("irc.freenode.net", 6667, account)
-    
-    bot.connect("pandorabot3k", "B2uySPUqpe")
-    bot.join("##herpdiderp")
-    
-    bot.start()
+    account = Account("", "")
+    account.stations[0].play(True)
