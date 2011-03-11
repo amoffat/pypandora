@@ -2,7 +2,7 @@ import os
 from setuptools import setup, find_packages, Extension
 
 pandora_module = Extension(
-    'pandora_c',
+    '_pandora',
     sources = [
         'pandora/_pandora/main.c',
         'pandora/_pandora/crypt.c',
