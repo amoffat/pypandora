@@ -12,8 +12,8 @@ pandora_module = Extension(
 setup(
     name = "pandora",
     version = "1.0",
-    author = "Andrew",
-    author_email = "",
+    author = "Andrew Moffat",
+    author_email = "andrew.moffat@medtelligent.com",
     url = "",
 
     packages = find_packages('.'),
