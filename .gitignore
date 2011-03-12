@@ -1,3 +1,4 @@
 *.pyc
 pandora.egg-info
 build
+_pandora.so

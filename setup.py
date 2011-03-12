@@ -6,7 +6,8 @@ pandora_module = Extension(
     sources = [
         'pandora/_pandora/main.c',
         'pandora/_pandora/crypt.c',
-    ]
+    ],
+    libraries = ['fmodex',],
 )
 
 setup(
