@@ -56,7 +56,7 @@ class Connection(object):
         self.rid = "%07dP" % (time.time() % 10000000)
         self.timeoffset = time.time()
         self.token = None
-
+        self.lid = None # listener id
 
     def send(self, get_data, body=None):        
         conn = httplib.HTTPConnection("%s:%d" % (self._pandora_host, self._pandora_port))
@@ -139,19 +139,28 @@ class Connection(object):
     def authenticate(self, email, password):
         logging.info("authenticating with %s" % email)
         get = {"method": "authenticateListener"}
-        body = self.get_template("authenticate", {
-            "timestamp": int(time.time() - self.timeoffset),
-            "email": email,
-            "password": password
-        })
-        xml = self.send(get, body)
-        for el in xml.findall("params/param/value/struct/member"):
-            children = el.getchildren()
-            if children[0].text == "authToken":
-                self.token = children[1].text
-            elif children[0].text == "listenerId":
-                self.lid = children[1].text	
+        
+        authenticated = False
+        authenticate_tries = 3
+        
+        while not authenticated and authenticate_tries:
+            body = self.get_template("authenticate", {
+                "timestamp": int(time.time() - self.timeoffset),
+                "email": email,
+                "password": password
+            })
+            xml = self.send(get, body)
+            for el in xml.findall("params/param/value/struct/member"):
+                children = el.getchildren()
+                if children[0].text == "authToken":
+                    self.token = children[1].text
+                elif children[0].text == "listenerId":
+                    self.lid = children[1].text	
+                    
+            if self.lid: authenticated = True
+            authenticate_tries -= 1
 
+        if not authenticated: raise Exception, "can't authenticate with pandora!?"
 
 
 class Account(object):
