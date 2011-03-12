@@ -85,9 +85,7 @@ class Connection(object):
         url = "%s?%s" % (self._pandora_rpc_path, urllib.urlencode(ordered))
         
         logging.info("talking to pandora %s" % url)
-
-        #print url
-        #print body
+        logging.debug("sending data %s" % body)
 
         body = _pandora.encrypt(body)
         conn.request("POST", url, body, headers)
@@ -96,8 +94,8 @@ class Connection(object):
         if resp.status != 200: raise Exception(resp.reason)
 
         ret_data = resp.read()
-        #print ret_data
-        #print "\n"
+        logging.debug("returned data %s" % ret_data)
+
         conn.close()
 
         xml = cElementTree.fromstring(ret_data)
