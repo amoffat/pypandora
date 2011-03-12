@@ -162,7 +162,7 @@ class Account(object):
         self._stations = {}
         self._message_subscribers = {}
         
-        if cache_dir: mp3_cache_dir = gettempdir()
+        if mp3_cache_dir: mp3_cache_dir = gettempdir()
         self.cache_dir = mp3_cache_dir
         
         self.current_station = None
@@ -314,7 +314,7 @@ class Song(object):
             part = re.sub("_+", "_", part)
             return part
         
-        self.filename = join(self.cache_dir, "%s-%s.mp3" % (format_title(songTitle), format_title(artistSummary)))
+        self.filename = join(self.account.cache_dir, "%s-%s.mp3" % (format_title(songTitle), format_title(artistSummary)))
         
         self.offset_events = None
 
