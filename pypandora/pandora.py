@@ -144,6 +144,7 @@ class Connection(object):
         authenticate_tries = 3
         
         while not authenticated and authenticate_tries:
+            logging.info("trying to authenticate with pandora...")
             body = self.get_template("authenticate", {
                 "timestamp": int(time.time() - self.timeoffset),
                 "email": email,
@@ -158,9 +159,13 @@ class Connection(object):
                     self.lid = children[1].text	
                     
             if self.lid: authenticated = True
-            authenticate_tries -= 1
+            else: 
+                authenticate_tries -= 1
+                logging.error("failed authentication, trying %d more times" % authenticate_tries)
 
-        if not authenticated: raise Exception, "can't authenticate with pandora!?"
+        if not authenticated:
+            logging.error("can't authenticiate with pandora?!")
+            raise Exception, "can't authenticate with pandora!?"
 
 
 class Account(object):
