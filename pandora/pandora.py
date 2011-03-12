@@ -163,7 +163,7 @@ class Account(object):
         self._stations = {}
         self._message_subscribers = {}
         
-        if mp3_cache_dir: mp3_cache_dir = gettempdir()
+        if not mp3_cache_dir: mp3_cache_dir = gettempdir()
         self.cache_dir = mp3_cache_dir
         
         self.current_station = None
@@ -279,7 +279,7 @@ class Station(object):
             song = Song(self, **song_params)
             self._playlist.append(song)
 
-        print song_params
+        #print song_params
         # only download the first one
         #self._playlist[0].load()
         return self._playlist
@@ -315,7 +315,7 @@ class Song(object):
             part = re.sub("_+", "_", part)
             return part
         
-        self.filename = join(self.account.cache_dir, "%s-%s.mp3" % (format_title(songTitle), format_title(artistSummary)))
+        self.filename = join(self.station.account.cache_dir, "%s-%s.mp3" % (format_title(songTitle), format_title(artistSummary)))
         
         self.offset_events = None
 
