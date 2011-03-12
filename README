@@ -1,1 +1,3 @@
-probably doesn't work since i gutted it.  needs someone to figure out the packaging/distribute stuff!  
+ported from pianobar https://github.com/PromyLOPh/pianobar
+
+consists of a high-level python module which controls account/station/song operations and a c extension that handles the encrypting/decrypting of the api calls to Pandora servers, as well as the actual audio playing (using FMOD)

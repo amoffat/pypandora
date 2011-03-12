@@ -260,9 +260,6 @@ class Station(object):
         self.account.current_song = self.current_song
         self.account.current_station = self
         self.current_song.play(block)
-        
-    def preload_next(self, block=True):
-        self.playlist[0].load(block=block)
 
     def pause(self):
         self.current_song.pause()
@@ -306,8 +303,6 @@ class Station(object):
             song = Song(self, **song_params)
             self._playlist.append(song)
 
-        #print song_params
-        # only download the first one
         #self._playlist[0].load()
         return self._playlist
     playlist = property(_get_playlist)
@@ -349,8 +344,8 @@ class Song(object):
         self.started = None
         self.stopped = None
         self.paused = False
-
-        self._db_key = ""
+        self.done = False # if the song has finished playing
+        
         self.stats = {
             "plays": 0
         }
@@ -416,7 +411,9 @@ class Song(object):
                 stats = _pandora.stats()
                 if stats:
                     total, pos = stats
-                    if pos == total and account.current_station: break
+                    if pos == total and account.current_station:
+                        self.done = True
+                        break
                         
                 time.sleep(1)
             self.publish_message("finished playing %s" % self)
