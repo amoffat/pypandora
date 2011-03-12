@@ -463,7 +463,5 @@ if __name__ == "__main__":
     if not options.password or not options.user:
         parser.error("Please provide your username and password")
     account = Account(options.user, options.password)
-    try:
-        account.stations[0].play(True)
-    except AttributeError:
-        print "No lid found. Likely bad user/password"
+    
+    account.stations[0].play(True)
