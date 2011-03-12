@@ -13,25 +13,17 @@ from urlparse import urlsplit
 from collections import deque
 import socket
 import logging
-import unicodedata
 import math
 from optparse import OptionParser
-
 from tempfile import gettempdir
 
 import _pandora
 
+
+
+
 THIS_DIR = dirname(abspath(__file__))
 TEMPLATE_DIR = join(THIS_DIR, "templates")
-
-
-
-
-
-
-
-
-
                         
     
 
@@ -180,12 +172,13 @@ class Connection(object):
             raise Exception, "can't authenticate with pandora!?"
 
 
+        
+        
 class Account(object):
     def __init__(self, email, password, mp3_cache_dir=None):
         self.connection = Connection()        
         self.email = email
         self.password = password
-        self.cookie = None
         self._stations = {}
         self._message_subscribers = {}
         
@@ -243,6 +236,8 @@ class Account(object):
     stations = property(_get_stations)
 
 
+    
+    
 class Station(object):    
     def __init__(self, account, stationId, stationIdToken, stationName, **kwargs):
         self.account = account
@@ -257,6 +252,7 @@ class Station(object):
         self.account.publish_message(msg)
 
     def play(self, block=False):
+        """ plays the next song in the station playlist """
         self.current_song = self.playlist.popleft()
         self.account.current_song = self.current_song
         self.account.current_station = self
@@ -272,12 +268,16 @@ class Station(object):
         self.next()
 
     def next(self):
-        #if self.account._queued_song: self.account._queued_song.cancel()
         self.publish_message("changing song...")
         _pandora.stop()
         self.play()
 
     def _get_playlist(self):
+        """ a playlist getter.  each call to Pandora's station api returns maybe
+        3 songs in the playlist.  so each time we access the playlist, we need
+        to see if it's empty.  if it's not, return it, if it is, get more
+        songs for the station playlist """
+        
         if self._playlist: return self._playlist
 
         format = "mp3-hifi"
@@ -369,6 +369,10 @@ class Song(object):
         self.station.account.publish_message(msg)
 
     def _download(self):
+        """ downloads the song file from Pandora's servers, returning the
+        filename when complete.  if the file already exists in the cache
+        directory, just return that """
+        
         self._download_lock.acquire()
                 
         # dont re-download if it already exists in cache
