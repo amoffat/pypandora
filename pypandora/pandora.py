@@ -1,6 +1,4 @@
 import eventlet
-eventlet.monkey_patch()
-
 import time
 from xml.etree import cElementTree
 import xml.dom.minidom
@@ -28,13 +26,6 @@ TEMPLATE_DIR = join(THIS_DIR, "templates")
     
 
 
-def dump_xml(x):
-    """ a convenience function for dumping xml from Pandora's servers """
-    el = xml.dom.minidom.parseString(cElementTree.tostring(x))
-    return el.toprettyxml(indent="  ")
-
-
-
 
 
 
@@ -52,7 +43,12 @@ class Connection(object):
         self.timeoffset = time.time()
         self.token = None
         self.lid = None # listener id
-
+        
+    @staticmethod
+    def dump_xml(x):
+        """ a convenience function for dumping xml from Pandora's servers """
+        el = xml.dom.minidom.parseString(cElementTree.tostring(x))
+        return el.toprettyxml(indent="  ")
         
     def send(self, get_data, body=None):        
         conn = httplib.HTTPConnection("%s:%d" % (self._pandora_host, self._pandora_port))
@@ -85,7 +81,7 @@ class Connection(object):
         url = "%s?%s" % (self._pandora_rpc_path, urllib.urlencode(ordered))
         
         logging.info("talking to pandora %s" % url)
-        logging.debug("sending data %s" % body)
+        logging.debug("sending data %s" % self.dump_xml(body))
 
         body = _pandora.encrypt(body)
         conn.request("POST", url, body, headers)
@@ -94,7 +90,7 @@ class Connection(object):
         if resp.status != 200: raise Exception(resp.reason)
 
         ret_data = resp.read()
-        logging.debug("returned data %s" % ret_data)
+        logging.debug("returned data %s" % self.dump_xml(ret_data))
 
         conn.close()
 
@@ -337,17 +333,11 @@ class Song(object):
             return part
         
         self.filename = join(self.station.account.cache_dir, "%s-%s.mp3" % (format_title(songTitle), format_title(artistSummary)))
-        
-        self.offset_events = None
 
         self.started = None
         self.stopped = None
         self.paused = False
         self.done = False # if the song has finished playing
-        
-        self.stats = {
-            "plays": 0
-        }
 
     @staticmethod
     def _decrypt_url(url):
@@ -486,15 +476,24 @@ class Song(object):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
-
-    parser = OptionParser(usage=("%prog [options] "))
-    parser.add_option('-u', "--username", dest="user", help="Your username")
-    parser.add_option('-p', '--password', dest='password', help='Your password')
+    parser = OptionParser(usage=("%prog [options]"))
+    parser.add_option('-u', "--username", dest="user", help="your Pandora username (your email)")
+    parser.add_option('-p', '--password', dest='password', help='your Pandora password')
+    parser.add_option('-d', '--debug', dest="logging_debug", action="store_true", default=False, help="turn on debugging")
     (options, args) = parser.parse_args()
+    
+    # set up logging
+    logging_level = logging.INFO
+    if options.logging_debug: logging_level = logging.DEBUG
+    logging.basicConfig(level=logging_level)
     
     if not options.password or not options.user:
         parser.error("Please provide your username and password")
+        
     account = Account(options.user, options.password)
-    
-    account.stations[0].play(True)
+
+    # play a random station
+    from random import randint
+    num_stations = len(account.stations)
+    random_station = randint(0, num_stations - 1)    
+    account.stations[random_station].play(True)
