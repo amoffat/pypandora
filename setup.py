@@ -4,8 +4,8 @@ from setuptools import setup, find_packages, Extension
 pandora_module = Extension(
     '_pandora',
     sources = [
-        'pandora/_pandora/main.c',
-        'pandora/_pandora/crypt.c',
+        'pypandora/_pandora/main.c',
+        'pypandora/_pandora/crypt.c',
     ],
     libraries = ['fmodex',],
 )

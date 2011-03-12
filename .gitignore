@@ -1,5 +1,5 @@
 *.pyc
-pandora.egg-info
+pypandora.egg-info
 python
 build
 _pandora.so
