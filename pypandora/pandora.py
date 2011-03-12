@@ -46,18 +46,21 @@ def dump_xml(x):
 
 
 class Connection(object):
+    """
+    Handles all the direct communication to Pandora's servers
+    """
     _pandora_protocol_version = 29
     _pandora_host = "www.pandora.com"
     _pandora_port = 80
     _pandora_rpc_path = "/radio/xmlrpc/v%d" % _pandora_protocol_version
 
     def __init__(self):
-        # route id
-        self.rid = "%07dP" % (time.time() % 10000000)
+        self.rid = "%07dP" % (time.time() % 10000000) # route id
         self.timeoffset = time.time()
         self.token = None
         self.lid = None # listener id
 
+        
     def send(self, get_data, body=None):        
         conn = httplib.HTTPConnection("%s:%d" % (self._pandora_host, self._pandora_port))
 
@@ -109,6 +112,9 @@ class Connection(object):
 
 
     def get_template(self, tmpl, params={}):
+        """ returns template from the template directory and populates it with
+        the params dict.  this saves a lot of work having to manually build
+        an xml template """
         tmpl_file = join(TEMPLATE_DIR, tmpl) + ".xml"
         h = open(tmpl_file, "r")
         xml = Template(h.read())
@@ -118,6 +124,9 @@ class Connection(object):
 
 
     def sync(self):
+        """ synchronizes the times between our clock and pandora's servers by
+        recording the timeoffset value, so that for every call made to Pandora,
+        we can specify the correct time of their servers in our call """
         get = {"method": "sync"}
         body = self.get_template("sync")
         timestamp = None
@@ -137,6 +146,8 @@ class Connection(object):
 
 
     def authenticate(self, email, password):
+        """ logs us into Pandora.  tries a few times, then fails if it doesn't
+        get a listener id """
         logging.info("authenticating with %s" % email)
         get = {"method": "authenticateListener"}
         
@@ -200,6 +211,8 @@ class Account(object):
         pass
 
     def _get_stations(self):
+        """ a private getter that puts the stations, sorted alphabetically,
+        into the self.stations attribute dictionary """
         if self._stations: return self._stations
         
         get = {"method": "getStations", "lid": self.connection.lid}
@@ -344,6 +357,9 @@ class Song(object):
 
     @staticmethod
     def _decrypt_url(url):
+        """ decrypts the song url where the song stream can be downloaded.  the
+        last 48 bytes are encrypted, so we pass those bytes to the c extension
+        and then tack the decrypted value back onto the url """
         e = url[-48:]
         d = _pandora.decrypt(e)
         url = url.replace(e, d)
