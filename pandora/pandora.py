@@ -16,13 +16,12 @@ import logging
 import unicodedata
 import math
 
+from tempfile import gettempdir
 
 import _pandora
 
 THIS_DIR = dirname(abspath(__file__))
 TEMPLATE_DIR = join(THIS_DIR, "templates")
-SONG_DIR = join(THIS_DIR, "cache")
-
 
 
 
@@ -155,13 +154,16 @@ class Connection(object):
 
 
 class Account(object):
-    def __init__(self, email, password):
+    def __init__(self, email, password, mp3_cache_dir=None):
         self.connection = Connection()        
         self.email = email
         self.password = password
         self.cookie = None
         self._stations = {}
         self._message_subscribers = {}
+        
+        if cache_dir: mp3_cache_dir = gettempdir()
+        self.cache_dir = mp3_cache_dir
         
         self.current_station = None
         self.current_song = None
@@ -312,7 +314,7 @@ class Song(object):
             part = re.sub("_+", "_", part)
             return part
         
-        self.filename = join(SONG_DIR, "%s-%s.mp3" % (format_title(songTitle), format_title(artistSummary)))
+        self.filename = join(self.cache_dir, "%s-%s.mp3" % (format_title(songTitle), format_title(artistSummary)))
         
         self.offset_events = None
 
@@ -442,5 +444,5 @@ class Song(object):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    account = Account("", "")
+    account = Account("", "", gettempdir())
     account.stations[0].play(True)
