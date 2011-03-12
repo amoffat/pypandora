@@ -37,6 +37,7 @@ TEMPLATE_DIR = join(THIS_DIR, "templates")
 
 
 def dump_xml(x):
+    """ a convenience function for dumping xml from Pandora's servers """
     el = xml.dom.minidom.parseString(cElementTree.tostring(x))
     return el.toprettyxml(indent="  ")
 
@@ -398,10 +399,19 @@ class Song(object):
         raise NotImplementedError
 
     def play(self, block=False):
+        """ downloads and plays this song.  if the song is already paused, it
+        just resumes.  if block is True, the song will download and play entirely
+        before this function returns.  if block is False, the song will download
+        and play in a greenthread, so this function will return immediately """
+        
+        # do we need to just resume?
         if self.paused:
             _pandora.resume()
             self.paused = False
             return
+        
+        # stop anything that is currently playing
+        _pandora.stop()
         
         def load_and_play():
             self.length = _pandora.play(self._download())
@@ -429,6 +439,7 @@ class Song(object):
         self.paused = True
 
     def _add_feedback(self, like=True):
+        """ common method called by both like and dislike """
         conn = self.station.account.connection
         
         get = {
@@ -450,11 +461,13 @@ class Song(object):
         xml = conn.send(get, body)
         
     def like(self):
+        logging.info("liking %s" % self)
         self.publish_message("liking %s" % self)
         self._add_feedback(like=True)
 
     def dislike(self):
         _pandora.stop()
+        logging.info("disliking %s" % self)
         self.publish_message("disliking %s" % self)
         self._add_feedback(like=False)
         self.station.next()
