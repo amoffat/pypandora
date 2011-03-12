@@ -15,6 +15,7 @@ import socket
 import logging
 import unicodedata
 import math
+from optparse import OptionParser
 
 
 import _pandora
@@ -442,5 +443,20 @@ class Song(object):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    account = Account("", "")
-    account.stations[0].play(True)
+    parser = OptionParser(
+        usage=("%prog [options] ")
+    )
+    parser.add_option('-u', "--username", dest="user",
+        help="Your username"
+    )
+    parser.add_option('-p', '--password', dest='password',
+        help='Your password'
+    )
+    (options, args) = parser.parse_args()
+    if not options.password or not options.user:
+        parser.error("Please provide your username and password")
+    account = Account(options.user, options.password)
+    try:
+        account.stations[0].play(True)
+    except AttributeError:
+        print "No lid found. Likely bad user/password"
