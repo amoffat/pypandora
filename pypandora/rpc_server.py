@@ -18,9 +18,12 @@ class PandoraServerProxy(object):
     def previous_song(self):
         pass
     
+    def get_playlist(self, station_id):
+        pass
+    
     def get_stations(self):
         if not self.account: return {}
-        return dict([(s.id, s.name) for s in self.account.stations])
+        return dict([(k, s.name) for k,s in self.account.stations.iteritems()])
     
     def song_info(self):
         pass
