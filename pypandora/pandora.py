@@ -189,6 +189,9 @@ class Account(object):
 
         self.login()
         
+    def stop(self):
+        self.current_station.stop()
+        
     def publish_message(self, msg):
         for name, subscriber in self._message_subscribers.iteritems():
             subscriber(msg)
@@ -249,6 +252,7 @@ class Station(object):
 
     def play(self, block=False):
         """ plays the next song in the station playlist """
+        logging.info("playing station %s" % self.name)
         self.current_song = self.playlist.popleft()
         self.account.current_song = self.current_song
         self.account.current_station = self
@@ -257,6 +261,9 @@ class Station(object):
 
     def pause(self):
         self.current_song.pause()
+        
+    def stop(self):
+        self.current_song.stop()
         
     def like(self): self.current_song.like()
     
@@ -277,7 +284,7 @@ class Station(object):
         
         if self._playlist: return self._playlist
 
-        format = "mp3-hifi"
+        format = "mp3"
         get = {
             "method": "getFragment", "lid": self.account.connection.lid,
             "arg1": self.id, "arg2": 0, "arg3": "", "arg4": "", "arg5": format,
