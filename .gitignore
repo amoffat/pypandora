@@ -1,4 +1,5 @@
 *.pyc
+*.wpr
 pypandora.egg-info
 python
 build
