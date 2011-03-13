@@ -178,7 +178,7 @@ class Account(object):
         self.connection = Connection()        
         self.email = email
         self.password = password
-        self._stations = {}
+        self._stations = []
         self._message_subscribers = {}
         
         if not mp3_cache_dir: mp3_cache_dir = gettempdir()
@@ -216,21 +216,18 @@ class Account(object):
         xml = self.connection.send(get, body)
 
         station_params = {}
-        self._stations = {}
+        self._stations = []
         Station._current_id = 0
 
-        stations = []
         for el in xml.findall("params/param/value/array/data/value"):
             for member in el.findall("struct/member"):
                 c = member.getchildren()
                 station_params[c[0].text] = c[1].text
                 
             station = Station(self, **station_params)
-            stations.append(station)
+            self._stations.append(station)
             
-        stations.sort(key=lambda s: s.name)
-        self._stations = dict(enumerate(stations))
-
+        self._stations.sort(key=lambda s: s.name)
         return self._stations
     stations = property(_get_stations)
 
