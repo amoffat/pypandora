@@ -252,6 +252,9 @@ class Station(object):
 
     def play(self, block=False, **kwargs):
         """ plays the next song in the station playlist """
+        if self.account.current_station and self.account.current_station is not self:
+            self.account.current_station.stop()
+            
         logging.info("playing station %s" % self.name)
         self.current_song = self.playlist.popleft()
         self.account.current_song = self.current_song
@@ -449,6 +452,7 @@ class Song(object):
                     break
                 except eventlet.queue.Empty, e: pass
 
+            logging.info("finished playing %s" % self)
             self.publish_message("finished playing %s" % self)
             self._play_lock.release()
             if finished_naturally and callable(finished_cb): eventlet.spawn_n(finished_cb) # call the callback

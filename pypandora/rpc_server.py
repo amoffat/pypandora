@@ -45,9 +45,7 @@ class PandoraServerProxy(object):
         return playlist
         
     def play_station(self, station_id):
-        station = self.get_station(station_id)
-        #if station is self.account.current_station: return
-        
+        station = self.get_station(station_id)        
         def play_next(): self.play_station(station_id)
         station.play(block=False, finished_cb=play_next)
     
