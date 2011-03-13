@@ -47,7 +47,8 @@ class Connection(object):
     @staticmethod
     def dump_xml(x):
         """ a convenience function for dumping xml from Pandora's servers """
-        el = xml.dom.minidom.parseString(cElementTree.tostring(x))
+        #el = xml.dom.minidom.parseString(cElementTree.tostring(x))
+        el = xml.dom.minidom.parseString(x)
         return el.toprettyxml(indent="  ")
         
     def send(self, get_data, body=None):        
@@ -80,8 +81,8 @@ class Connection(object):
         
         url = "%s?%s" % (self._pandora_rpc_path, urllib.urlencode(ordered))
         
-        logging.info("talking to pandora %s" % url)
-        logging.debug("sending data %s" % self.dump_xml(body))
+        logging.debug("talking to pandora %s" % url)
+        #logging.debug("sending data %s" % self.dump_xml(body))
 
         body = _pandora.encrypt(body)
         conn.request("POST", url, body, headers)
@@ -90,7 +91,7 @@ class Connection(object):
         if resp.status != 200: raise Exception(resp.reason)
 
         ret_data = resp.read()
-        logging.debug("returned data %s" % self.dump_xml(ret_data))
+        #logging.debug("returned data %s" % self.dump_xml(ret_data))
 
         conn.close()
 
@@ -148,7 +149,9 @@ class Connection(object):
                 "email": email,
                 "password": password
             })
-            xml = self.send(get, body)
+            # we use a copy because do some del operations on the dictionary
+            # from within send
+            xml = self.send(get.copy(), body)
             for el in xml.findall("params/param/value/struct/member"):
                 children = el.getchildren()
                 if children[0].text == "authToken":
@@ -164,6 +167,8 @@ class Connection(object):
         if not authenticated:
             logging.error("can't authenticiate with pandora?!")
             raise Exception, "can't authenticate with pandora!?"
+        
+        logging.info("authenticated with pandora")
 
 
         
@@ -251,6 +256,7 @@ class Station(object):
         self.account.current_song = self.current_song
         self.account.current_station = self
         self.current_song.play(block)
+        return self.current_song
 
     def pause(self):
         self.current_song.pause()
@@ -403,6 +409,7 @@ class Song(object):
         
         # do we need to just resume?
         if self.paused:
+            logging.info("resuming %s" % self)
             _pandora.resume()
             self.paused = False
             return
@@ -412,7 +419,8 @@ class Song(object):
         
         def load_and_play():
             self._play_lock.acquire()
-            self.length = _pandora.play(self._download())
+            self.length = _pandora.play(self._download())            
+            logging.info("playing %s" % self)
             self.publish_message("playing %s" % self)
             
             while True:            
