@@ -34,3 +34,8 @@ def serve(ip="localhost", port=8123):
 
     server.register_instance(PandoraServerProxy())    
     server.serve_forever()
+    
+    
+    
+if __name__ == "__main__":
+    serve()
