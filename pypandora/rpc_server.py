@@ -23,13 +23,14 @@ class PandoraServerProxy(object):
         station = self.account.stations.get(station_id, None)
         if not station: raise KeyError, "no station by key %s" % station_id
 
-        playlist = {}
+        playlist = []
         for song in station.playlist:
-            playlist[song.id] = {
+            playlist.append({
+                "id": song.id,
                 "title": song.title,
                 "artist": song.artist,
                 "album": song.album
-            }
+            })
         return playlist
         
     
