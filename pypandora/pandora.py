@@ -313,6 +313,7 @@ class Station(object):
 
 class Song(object):
     _download_lock = eventlet.semaphore.Semaphore()
+    _play_lock = eventlet.semaphore.Semaphore()
 
     def __init__(self, station, songTitle, artistSummary, audioURL, fileGain, userSeed, musicId, **kwargs):
         self.station = station
@@ -337,7 +338,11 @@ class Song(object):
         self.started = None
         self.stopped = None
         self.paused = False
+        
         self.done = False # if the song has finished playing
+        self.progress = 0 # number of seconds that have passed in playing
+        
+        self._stop_playing = eventlet.queue.Queue(1)
 
     @staticmethod
     def _decrypt_url(url):
@@ -406,6 +411,7 @@ class Song(object):
         _pandora.stop()
         
         def load_and_play():
+            self._play_lock.acquire()
             self.length = _pandora.play(self._download())
             self.publish_message("playing %s" % self)
             
@@ -413,20 +419,30 @@ class Song(object):
                 stats = _pandora.stats()
                 if stats:
                     total, pos = stats
+                    self.progress = pos
                     if pos == total and account.current_station:
                         self.done = True
                         break
-                        
-                time.sleep(1)
+                    
+                try:
+                    self._stop_playing.get(block=True, timeout=.25)
+                    logging.debug("got a stop signal for %s, breaking out of play loop" % self)
+                    break
+                except eventlet.queue.Empty, e: pass
+
             self.publish_message("finished playing %s" % self)
+            self._play_lock.release()
             
         if block: load_and_play()
         else: eventlet.spawn_n(load_and_play)
         
     def stop(self):
+        logging.info("stopping %s" % self)
         _pandora.stop()
+        self._stop_playing.put(True)
 
     def pause(self):
+        logging.info("pausing %s" % self)
         _pandora.pause()
         self.paused = True
 
