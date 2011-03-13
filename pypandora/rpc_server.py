@@ -6,6 +6,8 @@ import pypandora
 
 
 class PandoraServerProxy(object):
+    def __init__(self):
+        self.account = None
     
     def login(self, username, password):
         self.account = pypandora.Account(username, password)
@@ -17,15 +19,17 @@ class PandoraServerProxy(object):
         pass
     
     def get_stations(self):
-        pass
+        if not self.account: return {}
+        return dict([(str(k), v.name) for k,v in self.account.stations.iteritems()])
     
     def song_info(self):
         pass
 
 
     
-def start_server(ip="localhost", port=8123):
-    server = SimpleXMLRPCServer((ip, port))
+        
+def serve(ip="localhost", port=8123):
+    server = SimpleXMLRPCServer((ip, port), allow_none=True)
     server.register_introspection_functions()
 
     server.register_instance(PandoraServerProxy())    
