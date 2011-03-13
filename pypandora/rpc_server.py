@@ -8,6 +8,11 @@ import pypandora
 class PandoraServerProxy(object):
     def __init__(self):
         self.account = None
+        
+    def __getattribute__(self, name):
+        attr = object.__getattribute__(self, name)
+        if name == "account" and not attr: raise Exception, "please login first"
+        return attr
     
     def login(self, username, password):
         self.account = pypandora.Account(username, password)
@@ -33,6 +38,8 @@ class PandoraServerProxy(object):
             })
         return playlist
         
+    def play_station(self, station_id):
+        pass
     
     def get_stations(self):
         if not self.account: return {}
