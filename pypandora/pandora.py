@@ -422,11 +422,12 @@ class Song(object):
             self.paused = False
             return
         
-        # stop anything that is currently playing
-        _pandora.stop()
-        
         def load_and_play():
             self._play_lock.acquire()
+            
+            # stop anything that is currently playing
+            _pandora.stop()
+        
             self.length = _pandora.play(self._download())            
             logging.info("playing %s" % self)
             self.publish_message("playing %s" % self)
