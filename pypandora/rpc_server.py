@@ -19,7 +19,19 @@ class PandoraServerProxy(object):
         pass
     
     def get_playlist(self, station_id):
-        pass
+        if not self.account: return {}
+        station = self.account.stations.get(station_id, None)
+        if not station: raise KeyError, "no station by key %s" % station_id
+
+        playlist = {}
+        for song in station.playlist:
+            playlist[song.id] = {
+                "title": song.title,
+                "artist": song.artist,
+                "album": song.album
+            }
+        return playlist
+        
     
     def get_stations(self):
         if not self.account: return {}
