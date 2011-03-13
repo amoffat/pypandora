@@ -53,7 +53,12 @@ class PandoraServerProxy(object):
         if not self.account: return {}
         return dict([(k, s.name) for k,s in self.account.stations.iteritems()])
     
-    def song_info(self):
+    def current_station(self):
+        station = self.account.current_station
+        if not station: raise Exception, "no current station"
+        return (station.id, station.name) 
+    
+    def current_song(self):
         song = self.account.current_song
         if not song: raise Exception, "no current song playing"
         song = {
