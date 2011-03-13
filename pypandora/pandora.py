@@ -250,13 +250,13 @@ class Station(object):
     def publish_message(self, msg):
         self.account.publish_message(msg)
 
-    def play(self, block=False):
+    def play(self, block=False, **kwargs):
         """ plays the next song in the station playlist """
         logging.info("playing station %s" % self.name)
         self.current_song = self.playlist.popleft()
         self.account.current_song = self.current_song
         self.account.current_station = self
-        self.current_song.play(block)
+        self.current_song.play(block, **kwargs)
         return self.current_song
 
     def pause(self):
@@ -409,7 +409,7 @@ class Song(object):
         """ create a new station from this song """
         raise NotImplementedError
 
-    def play(self, block=False):
+    def play(self, block=False, finished_cb=None):
         """ downloads and plays this song.  if the song is already paused, it
         just resumes.  if block is True, the song will download and play entirely
         before this function returns.  if block is False, the song will download
@@ -432,13 +432,15 @@ class Song(object):
             logging.info("playing %s" % self)
             self.publish_message("playing %s" % self)
             
+            finished_naturally = False
             while True:            
                 stats = _pandora.stats()
                 if stats:
                     total, pos = stats
                     self.progress = pos
-                    if pos == total and account.current_station:
+                    if pos == total:
                         self.done = True
+                        finished_naturally = True
                         break
                     
                 try:
@@ -449,6 +451,7 @@ class Song(object):
 
             self.publish_message("finished playing %s" % self)
             self._play_lock.release()
+            if finished_naturally and callable(finished_cb): eventlet.spawn_n(finished_cb) # call the callback
             
         if block: load_and_play()
         else: eventlet.spawn_n(load_and_play)
