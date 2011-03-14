@@ -22,8 +22,8 @@ import _pandora
 
 THIS_DIR = dirname(abspath(__file__))
 TEMPLATE_DIR = join(THIS_DIR, "templates")
-                        
-    
+
+
 
 
 
@@ -43,14 +43,14 @@ class Connection(object):
         self.timeoffset = time.time()
         self.token = None
         self.lid = None # listener id
-        
+
     @staticmethod
     def dump_xml(x):
         """ a convenience function for dumping xml from Pandora's servers """
         #el = xml.dom.minidom.parseString(cElementTree.tostring(x))
         el = xml.dom.minidom.parseString(x)
         return el.toprettyxml(indent="  ")
-        
+
     def send(self, get_data, body=None):        
         conn = httplib.HTTPConnection("%s:%d" % (self._pandora_host, self._pandora_port))
 
@@ -60,27 +60,27 @@ class Connection(object):
         # otherwise we'll get a 500 error.  so this orders them correctly.
         ordered = []
         ordered.append(("rid", self.rid))
-        
+
         if "lid" in get_data:
             ordered.append(("lid", get_data["lid"]))
             del get_data["lid"]
-            
+
         ordered.append(("method", get_data["method"]))
         del get_data["method"]
-        
+
         def sort_fn(item):
             k, v = item
             m = re.search("\d+$", k)
             if not m: return k
             else: return int(m.group(0))
-        
+
         kv = [(k, v) for k,v in get_data.iteritems()]
         kv.sort(key=sort_fn)
         ordered.extend(kv)
-        
-        
+
+
         url = "%s?%s" % (self._pandora_rpc_path, urllib.urlencode(ordered))
-        
+
         logging.debug("talking to pandora %s" % url)
         #logging.debug("sending data %s" % self.dump_xml(body))
 
@@ -123,7 +123,7 @@ class Connection(object):
             xml = self.send(get.copy(), body)
             timestamp = xml.find("params/param/value").text
             timestamp = _pandora.decrypt(timestamp)
-            
+
             timestamp_chars = []
             for c in timestamp:
                 if c.isdigit(): timestamp_chars.append(c)
@@ -138,10 +138,10 @@ class Connection(object):
         get a listener id """
         logging.info("authenticating with %s" % email)
         get = {"method": "authenticateListener"}
-        
+
         authenticated = False
         authenticate_tries = 3
-        
+
         while not authenticated and authenticate_tries:
             logging.info("trying to authenticate with pandora...")
             body = self.get_template("authenticate", {
@@ -158,7 +158,7 @@ class Connection(object):
                     self.token = children[1].text
                 elif children[0].text == "listenerId":
                     self.lid = children[1].text	
-                    
+
             if self.lid: authenticated = True
             else: 
                 authenticate_tries -= 1
@@ -167,12 +167,12 @@ class Connection(object):
         if not authenticated:
             logging.error("can't authenticiate with pandora?!")
             raise Exception, "can't authenticate with pandora!?"
-        
+
         logging.info("authenticated with pandora")
 
 
-        
-        
+
+
 class Account(object):
     def __init__(self, email, password, mp3_cache_dir=None):
         self.connection = Connection()        
@@ -180,22 +180,22 @@ class Account(object):
         self.password = password
         self._stations = {}
         self._message_subscribers = {}
-        
+
         if not mp3_cache_dir: mp3_cache_dir = gettempdir()
         self.cache_dir = mp3_cache_dir
-        
+
         self.current_station = None
         self.current_song = None
 
         self.login()
-        
+
     def stop(self):
         self.current_station.stop()
-        
+
     def publish_message(self, msg):
         for name, subscriber in self._message_subscribers.iteritems():
             subscriber(msg)
-    
+
     def subscribe_to_messages(self, name, subscriber):
         self._message_subscribers[name] = subscriber
 
@@ -210,7 +210,7 @@ class Account(object):
         """ a private getter that puts the stations, sorted alphabetically,
         into the self.stations attribute dictionary """
         if self._stations: return self._stations
-        
+
         get = {"method": "getStations", "lid": self.connection.lid}
         body = self.connection.get_template("get_stations", {
             "timestamp": int(time.time() - self.connection.timeoffset),
@@ -226,17 +226,17 @@ class Account(object):
             for member in el.findall("struct/member"):
                 c = member.getchildren()
                 station_params[c[0].text] = c[1].text
-                
+
             station = Station(self, **station_params)
             self._stations[station.id] = station
-            
+
         #self._stations.sort(key=lambda s: s.name)
         return self._stations
     stations = property(_get_stations)
 
 
-    
-    
+
+
 class Station(object):    
     def __init__(self, account, stationId, stationIdToken, stationName, **kwargs):
         self.account = account
@@ -246,7 +246,7 @@ class Station(object):
         self.current_song = None
         self._loaded = eventlet.event.Event()
         self._playlist = deque()
-        
+
     def publish_message(self, msg):
         self.account.publish_message(msg)
 
@@ -254,7 +254,7 @@ class Station(object):
         """ plays the next song in the station playlist """
         if self.account.current_station and self.account.current_station is not self:
             self.account.current_station.stop()
-            
+
         logging.info("playing station %s" % self.name)
         self.current_song = self.playlist.popleft()
         self.account.current_song = self.current_song
@@ -264,12 +264,12 @@ class Station(object):
 
     def pause(self):
         self.current_song.pause()
-        
+
     def stop(self):
         self.current_song.stop()
-        
+
     def like(self): self.current_song.like()
-    
+
     def dislike(self):
         self.current_song.dislike()
         self.next()
@@ -284,7 +284,7 @@ class Station(object):
         3 songs in the playlist.  so each time we access the playlist, we need
         to see if it's empty.  if it's not, return it, if it is, get more
         songs for the station playlist """
-        
+
         if self._playlist: return self._playlist
 
         format = "mp3"
@@ -315,6 +315,9 @@ class Station(object):
         return self._playlist
     playlist = property(_get_playlist)
 
+    @staticmethod
+    def finish_cb__play_next(account, station, song):
+        station.play()
 
     def __repr__(self):
         return "<Station %s: \"%s\">" % (self.id, self.name)
@@ -335,30 +338,30 @@ class Song(object):
         self.title = songTitle
         self.album = albumTitle
         self.artist = artistSummary
-        
+
         self.__dict__.update(kwargs)
-        
+
         try: self.gain = float(fileGain)
         except: self.gain = 0.0
         self.url = self._decrypt_url(audioURL)
         self.length = 0 # will be populated when played
-        
+
         def format_title(part):
             part = part.lower()
             part = part.replace(" ", "_")
             part = re.sub("\W", "", part)
             part = re.sub("_+", "_", part)
             return part
-        
+
         self.filename = join(self.station.account.cache_dir, "%s-%s.mp3" % (format_title(songTitle), format_title(artistSummary)))
 
         self.started = None
         self.stopped = None
         self.paused = False
-        
+
         self.done = False # if the song has finished playing
         self.progress = 0 # number of seconds that have passed in playing
-        
+
         self._stop_playing = eventlet.queue.Queue(1)
 
     @staticmethod
@@ -374,7 +377,7 @@ class Song(object):
     def load(self, block=False):
         if block: self._download()
         else: eventlet.spawn_n(self._download)
-        
+
     def publish_message(self, msg):
         self.station.account.publish_message(msg)
 
@@ -382,16 +385,16 @@ class Song(object):
         """ downloads the song file from Pandora's servers, returning the
         filename when complete.  if the file already exists in the cache
         directory, just return that """
-        
+
         self._download_lock.acquire()
-                
+
         # dont re-download if it already exists in cache
         if exists(self.filename):
             logging.info("found existing file for %s" % self.filename)
             self._download_lock.release()
             return self.filename
         logging.info("downloading %s" % self.filename)
-        
+
         split = urlsplit(self.url)
         host = split.netloc
         path = split.path + "?" + split.query
@@ -404,6 +407,8 @@ class Song(object):
         h.write(res.read())
         c.close()
         h.close()
+
+        logging.info("finished downloading %s" % self.filename)
 
         self._download_lock.release()
         return self.filename
@@ -455,11 +460,13 @@ class Song(object):
             logging.info("finished playing %s" % self)
             self.publish_message("finished playing %s" % self)
             self._play_lock.release()
-            if finished_naturally and callable(finished_cb): eventlet.spawn_n(finished_cb) # call the callback
-            
+            if finished_naturally and callable(finished_cb):
+                # call the callback
+                eventlet.spawn_n(finished_cb, self.station.account, self.station, self)
+
         if block: load_and_play()
         else: eventlet.spawn_n(load_and_play)
-        
+
     def stop(self):
         logging.info("stopping %s" % self)
         _pandora.stop()
@@ -473,7 +480,7 @@ class Song(object):
     def _add_feedback(self, like=True):
         """ common method called by both like and dislike """
         conn = self.station.account.connection
-        
+
         get = {
             "method": "addFeedback",
             "lid":  conn.lid,
@@ -491,7 +498,7 @@ class Song(object):
             "arg4": 0, "arg5": int(like), "arg6": 0, "arg7": 1
         })
         xml = conn.send(get, body)
-        
+
     def like(self):
         logging.info("liking %s" % self)
         self.publish_message("liking %s" % self)
@@ -521,15 +528,15 @@ if __name__ == "__main__":
     parser.add_option('-p', '--password', dest='password', help='your Pandora password')
     parser.add_option('-d', '--debug', dest="logging_debug", action="store_true", default=False, help="turn on debugging")
     (options, args) = parser.parse_args()
-    
+
     # set up logging
     logging_level = logging.INFO
     if options.logging_debug: logging_level = logging.DEBUG
     logging.basicConfig(level=logging_level)
-    
+
     if not options.password or not options.user:
         parser.error("Please provide your username and password")
-        
+
     account = Account(options.user, options.password)
 
     # play a random station
