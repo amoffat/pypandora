@@ -6,6 +6,18 @@ import pypandora
 import logging
 
 
+
+def format_song(song):
+    """ helper function for formatting songs over rpc """
+    return {
+        "id": song.id,
+        "title": song.title,
+        "artist": song.artist,
+        "album": song.album,
+        "length": song.length,
+        "progress": song.progress
+    }    
+
 class PandoraServerProxy(object):
     def __init__(self):
         self.account = None
@@ -36,17 +48,13 @@ class PandoraServerProxy(object):
         station = self.get_station(station_id)
         playlist = []
         for song in station.playlist:
-            playlist.append({
-                "id": song.id,
-                "title": song.title,
-                "artist": song.artist,
-                "album": song.album
-            })
+            playlist.append(format_song(song))
         return playlist
         
     def play_station(self, station_id):
         station = self.get_station(station_id)
-        station.play(block=False, finished_cb=station.finish_cb__play_next)
+        song = station.play(block=False, finished_cb=station.finish_cb__play_next)
+        return format_song(song)        
     
     def get_stations(self):
         if not self.account: return {}
@@ -60,15 +68,7 @@ class PandoraServerProxy(object):
     def current_song(self):
         song = self.account.current_song
         if not song: raise Exception, "no current song playing"
-        song = {
-            "id": song.id,
-            "title": song.title,
-            "artist": song.artist,
-            "album": song.album,
-            "length": song.length,
-            "progress": song.progress
-        }
-        return song
+        return format_song(song)
 
 
     
