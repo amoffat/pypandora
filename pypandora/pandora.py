@@ -252,8 +252,11 @@ class Station(object):
 
     def play(self, block=False, **kwargs):
         """ plays the next song in the station playlist """
-        if self.account.current_station and self.account.current_station is not self:
-            self.account.current_station.stop()
+        if self.account.current_station and self.account.current_station is self:
+            logging.info("%s station is already playing" % self.name)
+            return
+        
+        if self.account.curren_station: self.account.current_station.stop()
 
         logging.info("playing station %s" % self.name)
         self.current_song = self.playlist.popleft()
