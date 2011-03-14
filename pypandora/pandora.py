@@ -250,9 +250,9 @@ class Station(object):
     def publish_message(self, msg):
         self.account.publish_message(msg)
 
-    def play(self, block=False, **kwargs):
+    def play(self, block=False, next_song=False, **kwargs):
         """ plays the next song in the station playlist """
-        if self.account.current_station and self.account.current_station is self:
+        if self.account.current_station and self.account.current_station is self and not next_song:
             logging.info("%s station is already playing" % self.name)
             return self.current_song
         
@@ -282,10 +282,9 @@ class Station(object):
         self.current_song.dislike()
         self.next()
 
-    def next(self):
+    def next(self, **kwargs):
         self.publish_message("changing song...")
-        _pandora.stop()
-        self.play()
+        self.play(next_song=True, **kwargs)
 
     def _get_playlist(self):
         """ a playlist getter.  each call to Pandora's station api returns maybe
@@ -325,7 +324,7 @@ class Station(object):
 
     @staticmethod
     def finish_cb__play_next(account, station, song):
-        station.play(finished_cb=Station.finish_cb__play_next)
+        station.next(finished_cb=Station.finish_cb__play_next)
 
     def __repr__(self):
         return "<Station %s: \"%s\">" % (self.id, self.name)
