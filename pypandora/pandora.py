@@ -256,7 +256,7 @@ class Station(object):
             logging.info("%s station is already playing" % self.name)
             return
         
-        if self.account.curren_station: self.account.current_station.stop()
+        if self.account.current_station: self.account.current_station.stop()
 
         logging.info("playing station %s" % self.name)
         self.current_song = self.playlist.popleft()
