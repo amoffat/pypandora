@@ -262,6 +262,11 @@ class Station(object):
         self.current_song.play(block, **kwargs)
         return self.current_song
 
+    def preload_next(self, block=False):
+        next_song = self.playlist[0]
+        logging.info("preloading %s" % next_song)
+        next_song.load(block)
+        
     def pause(self):
         self.current_song.pause()
 
@@ -317,7 +322,7 @@ class Station(object):
 
     @staticmethod
     def finish_cb__play_next(account, station, song):
-        station.play()
+        station.play(finished_cb=Station.finish_cb__play_next)
 
     def __repr__(self):
         return "<Station %s: \"%s\">" % (self.id, self.name)
@@ -375,7 +380,7 @@ class Song(object):
         return url[:-8]
 
     def load(self, block=False):
-        if block: self._download()
+        if block: return self._download()
         else: eventlet.spawn_n(self._download)
 
     def publish_message(self, msg):
@@ -422,35 +427,41 @@ class Song(object):
         just resumes.  if block is True, the song will download and play entirely
         before this function returns.  if block is False, the song will download
         and play in a greenthread, so this function will return immediately """
-        
+
         # do we need to just resume?
         if self.paused:
             logging.info("resuming %s" % self)
             _pandora.resume()
             self.paused = False
             return
-        
+
         def load_and_play():
             self._play_lock.acquire()
-            
+
             # stop anything that is currently playing
             _pandora.stop()
-        
-            self.length = _pandora.play(self._download())            
+
+            self.length = _pandora.play(self.load(block=True))            
             logging.info("playing %s" % self)
             self.publish_message("playing %s" % self)
-            
+
             finished_naturally = False
+            preloading_next = False
             while True:            
                 stats = _pandora.stats()
                 if stats:
                     total, pos = stats
                     self.progress = pos
+
+                    if pos + 30 >= total and not preloading_next:
+                        preloading_next = True
+                        self.station.preload_next()
+
                     if pos == total:
                         self.done = True
                         finished_naturally = True
                         break
-                    
+
                 try:
                     self._stop_playing.get(block=True, timeout=.25)
                     logging.debug("got a stop signal for %s, breaking out of play loop" % self)
@@ -462,6 +473,7 @@ class Song(object):
             self._play_lock.release()
             if finished_naturally and callable(finished_cb):
                 # call the callback
+                logging.debug("calling callback %r" % finished_cb)
                 eventlet.spawn_n(finished_cb, self.station.account, self.station, self)
 
         if block: load_and_play()
