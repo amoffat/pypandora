@@ -254,7 +254,7 @@ class Station(object):
         """ plays the next song in the station playlist """
         if self.account.current_station and self.account.current_station is self:
             logging.info("%s station is already playing" % self.name)
-            return
+            return self.current_song
         
         if self.account.current_station: self.account.current_station.stop()
 

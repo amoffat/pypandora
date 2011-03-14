@@ -54,7 +54,8 @@ class PandoraServerProxy(object):
     def play_station(self, station_id):
         station = self.get_station(station_id)
         song = station.play(block=False, finished_cb=station.finish_cb__play_next)
-        return format_song(song)        
+        if not song: return False
+        return format_song(song)
     
     def get_stations(self):
         if not self.account: return {}
