@@ -536,17 +536,19 @@ class Song(object):
 
 
 
+
+
+
+logging.basicConfig(
+    format="(%(process)d) %(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
+
 if __name__ == "__main__":
     parser = OptionParser(usage=("%prog [options]"))
     parser.add_option('-u', "--username", dest="user", help="your Pandora username (your email)")
     parser.add_option('-p', '--password', dest='password', help='your Pandora password')
-    parser.add_option('-d', '--debug', dest="logging_debug", action="store_true", default=False, help="turn on debugging")
     (options, args) = parser.parse_args()
-
-    # set up logging
-    logging_level = logging.INFO
-    if options.logging_debug: logging_level = logging.DEBUG
-    logging.basicConfig(level=logging_level)
 
     if not options.password or not options.user:
         parser.error("Please provide your username and password")

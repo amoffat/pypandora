@@ -97,8 +97,19 @@ static PyObject* pandora_setMusicSpeed(PyObject *self, PyObject *args) {
 }
 
 static PyObject* pandora_stopMusic(PyObject *self, PyObject *args) {
-    (void)FMOD_Channel_Stop(channel);
-    (void)FMOD_Sound_Release(music);
+    FMOD_RESULT res;
+
+    if (channel) {
+        res = FMOD_Channel_Stop(channel);
+        channel = 0;
+        pandora_fmod_errcheck(res);
+    }
+    if (music) {
+        res = FMOD_Sound_Release(music);
+        music = NULL;
+        pandora_fmod_errcheck(res);
+    }
+
     Py_RETURN_NONE;
 }
 
@@ -139,7 +150,13 @@ static PyObject* pandora_playMusic(PyObject *self, PyObject *args) {
     if (!PyArg_ParseTuple(args, "s", &song_file)) return NULL;
 
     FMOD_RESULT res;
-    if (music) (void)FMOD_Sound_Release(music); // avoid memory leak...
+    if (music != NULL) {
+        res = FMOD_Channel_Stop(channel);
+        pandora_fmod_errcheck(res);
+
+        res = FMOD_Sound_Release(music); // avoid memory leak...
+        pandora_fmod_errcheck(res);
+    }
     res = FMOD_System_CreateSound(sound_system, song_file, FMOD_SOFTWARE, 0, &music);
     pandora_fmod_errcheck(res);
     res = FMOD_System_PlaySound(sound_system, FMOD_CHANNEL_FREE, music, 0, &channel);
