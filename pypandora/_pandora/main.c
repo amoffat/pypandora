@@ -6,8 +6,8 @@
 #include <time.h>
 
 
-static FMOD_SYSTEM* sound_system;
-static FMOD_SOUND* music;
+static FMOD_SYSTEM* sound_system = NULL;
+static FMOD_SOUND* music = NULL;
 static FMOD_CHANNEL* channel = 0;
 static float original_frequency = 0;
 static float volume = 1.0;
@@ -48,87 +48,88 @@ static PyObject* pandora_decrypt(PyObject *self, PyObject *args) {
 }
 
 static PyObject* pandora_getMusicStats(PyObject *self, PyObject *args) {
-	if (!channel) Py_RETURN_NONE;
+    if (!channel) Py_RETURN_NONE;
 
-	unsigned int pos;
-	(void)FMOD_Channel_GetPosition(channel, &pos, FMOD_TIMEUNIT_MS);
+    unsigned int pos;
+    (void)FMOD_Channel_GetPosition(channel, &pos, FMOD_TIMEUNIT_MS);
 
-	unsigned int length;
-	(void)FMOD_Sound_GetLength(music, &length, FMOD_TIMEUNIT_MS);
-	return Py_BuildValue("(ii)", (int)((float)length / 1000.0f), (int)((float)pos / 1000.0f));
+    unsigned int length;
+    (void)FMOD_Sound_GetLength(music, &length, FMOD_TIMEUNIT_MS);
+    return Py_BuildValue("(ii)", (int)((float)length / 1000.0f), (int)((float)pos / 1000.0f));
 }
 
 static PyObject* pandora_setVolume(PyObject *self, PyObject *args) {
-	if (!channel) Py_RETURN_NONE;
+    if (!channel) Py_RETURN_NONE;
 
-	if (!PyArg_ParseTuple(args, "f", &volume)) return NULL;
+    if (!PyArg_ParseTuple(args, "f", &volume)) return NULL;
 
-	FMOD_RESULT res;
-	res = FMOD_Channel_SetVolume(channel, volume);
-	pandora_fmod_errcheck(res);
+    FMOD_RESULT res;
+    res = FMOD_Channel_SetVolume(channel, volume);
+    pandora_fmod_errcheck(res);
 
-	Py_RETURN_NONE;
+    Py_RETURN_NONE;
 }
 
 static PyObject* pandora_musicIsPlaying(PyObject *self, PyObject *args) {
-	FMOD_BOOL isplaying = 0;
-	FMOD_RESULT res;
+    FMOD_BOOL isplaying = 0;
+    FMOD_RESULT res;
 
-	if (channel) {
-		res = FMOD_Channel_IsPlaying(channel, &isplaying);
-		pandora_fmod_errcheck(res);
-	}
+    if (channel) {
+        res = FMOD_Channel_IsPlaying(channel, &isplaying);
+        pandora_fmod_errcheck(res);
+    }
 
-	if (isplaying) {Py_RETURN_TRUE;}
-	else {Py_RETURN_FALSE;}
+    if (isplaying) {Py_RETURN_TRUE;}
+    else {Py_RETURN_FALSE;}
 }
 
 static PyObject* pandora_setMusicSpeed(PyObject *self, PyObject *args) {
-	FMOD_RESULT res;
+    FMOD_RESULT res;
 
-	float new_freq;
-	if (!PyArg_ParseTuple(args, "f", &new_freq)) return NULL;
+    float new_freq;
+    if (!PyArg_ParseTuple(args, "f", &new_freq)) return NULL;
 
-	if (channel) {
-		res = FMOD_Channel_SetFrequency(channel, new_freq * original_frequency);
-		pandora_fmod_errcheck(res);
-	}
-	Py_RETURN_NONE;
+    if (channel) {
+        res = FMOD_Channel_SetFrequency(channel, new_freq * original_frequency);
+        pandora_fmod_errcheck(res);
+    }
+    Py_RETURN_NONE;
 }
 
 static PyObject* pandora_stopMusic(PyObject *self, PyObject *args) {
-	(void)FMOD_Channel_Stop(channel);
-	Py_RETURN_NONE;
+    (void)FMOD_Channel_Stop(channel);
+    (void)FMOD_Sound_Release(music);
+    Py_RETURN_NONE;
 }
 
 static PyObject* pandora_pauseMusic(PyObject *self, PyObject *args) {
-	FMOD_RESULT res;
-	FMOD_BOOL isplaying;
+    FMOD_RESULT res;
+    FMOD_BOOL isplaying;
 
-	if (channel) {
-		res = FMOD_Channel_IsPlaying(channel, &isplaying);
-		pandora_fmod_errcheck(res);
-		if (isplaying) {
-			res = FMOD_Channel_SetPaused(channel, 1);
-			pandora_fmod_errcheck(res);
-		}
-	}
-	Py_RETURN_NONE;
+    if (channel) {
+        res = FMOD_Channel_IsPlaying(channel, &isplaying);
+        pandora_fmod_errcheck(res);
+        if (isplaying) {
+            res = FMOD_Channel_SetPaused(channel, 1);
+            pandora_fmod_errcheck(res);
+        }
+    }
+    Py_RETURN_NONE;
 }
 
 static PyObject* pandora_unpauseMusic(PyObject *self, PyObject *args) {
-	FMOD_RESULT res;
-	FMOD_BOOL isplaying;
+    FMOD_RESULT res;
+    FMOD_BOOL isplaying;
 
-	if (channel) {
-		res = FMOD_Channel_IsPlaying(channel, &isplaying);
-		pandora_fmod_errcheck(res);
-		if (isplaying) {
-			res = FMOD_Channel_SetPaused(channel, 0);
-			pandora_fmod_errcheck(res);
-		}
-	}
-	Py_RETURN_NONE;
+    if (channel) {
+        res = FMOD_Channel_IsPlaying(channel, &isplaying);
+        pandora_fmod_errcheck(res);
+        if (isplaying) {
+            res = FMOD_Channel_SetPaused(channel, 0);
+            pandora_fmod_errcheck(res);
+        }
+    }
+    Py_RETURN_NONE;
 }
 
 
@@ -138,6 +139,7 @@ static PyObject* pandora_playMusic(PyObject *self, PyObject *args) {
     if (!PyArg_ParseTuple(args, "s", &song_file)) return NULL;
 
     FMOD_RESULT res;
+    if (music) (void)FMOD_Sound_Release(music); // avoid memory leak...
     res = FMOD_System_CreateSound(sound_system, song_file, FMOD_SOFTWARE, 0, &music);
     pandora_fmod_errcheck(res);
     res = FMOD_System_PlaySound(sound_system, FMOD_CHANNEL_FREE, music, 0, &channel);
@@ -149,10 +151,10 @@ static PyObject* pandora_playMusic(PyObject *self, PyObject *args) {
     res = FMOD_Channel_SetVolume(channel, volume);
     pandora_fmod_errcheck(res);
 
-	unsigned int length;
-	res = FMOD_Sound_GetLength(music, &length, FMOD_TIMEUNIT_MS);
-	pandora_fmod_errcheck(res);
-	return Py_BuildValue("i", (int)((float)length / 1000.0f));
+    unsigned int length;
+    res = FMOD_Sound_GetLength(music, &length, FMOD_TIMEUNIT_MS);
+    pandora_fmod_errcheck(res);
+    return Py_BuildValue("i", (int)((float)length / 1000.0f));
 }
 
 static PyObject* pandora_encrypt(PyObject *self, PyObject *args) {
@@ -172,8 +174,8 @@ static void cleanup() {
 }
 
 PyMODINIT_FUNC init_pandora(void) {
-	FMOD_System_Create(&sound_system);
-	FMOD_System_Init(sound_system, 32, FMOD_INIT_NORMAL, NULL);
+    FMOD_System_Create(&sound_system);
+    FMOD_System_Init(sound_system, 32, FMOD_INIT_NORMAL, NULL);
 
     (void) Py_InitModule("_pandora", pandora_methods);
 
