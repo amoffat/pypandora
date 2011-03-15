@@ -31,7 +31,9 @@ class PandoraServerProxy(object):
         self.account = pypandora.Account(username, password)
         
     def next_song(self):
-        pass
+        if not self.account.current_station: raise Exception, "no station selected"
+        song = format_song(self.account.current_station.next())
+        return song
     
     def previous_song(self):
         pass

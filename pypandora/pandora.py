@@ -284,7 +284,7 @@ class Station(object):
 
     def next(self, **kwargs):
         self.publish_message("changing song...")
-        self.play(next_song=True, **kwargs)
+        return self.play(next_song=True, **kwargs)
 
     def _get_playlist(self):
         """ a playlist getter.  each call to Pandora's station api returns maybe
