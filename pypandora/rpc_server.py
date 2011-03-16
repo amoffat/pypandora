@@ -31,7 +31,7 @@ class PandoraServerProxy(object):
         self.account = pypandora.Account(username, password)
         
     def next_song(self):
-        if not self.account.current_station: raise Exception, "no station selected"
+        station = self._get_current_station()
         song = self.account.current_station.next(finished_cb=station.finish_cb__play_next)
         return format_song(song)
     
@@ -41,11 +41,17 @@ class PandoraServerProxy(object):
         
     def dislike_song(self):
         song = self._get_current_song()
-        return format_song(song.dislike())
+        station = self._get_current_station()
+        return format_song(song.dislike(finished_cb=station.finish_cb__play_next))
     
     def _get_station(self, station_id):
         station = self.account.stations.get(station_id, None)
         if not station: raise KeyError, "no station by key %s" % station_id
+        return station
+    
+    def _get_current_station(self):
+        station = self.account.current_station
+        if not station: raise Exception, "no station selected"
         return station
     
     def _get_current_song(self):
@@ -74,8 +80,7 @@ class PandoraServerProxy(object):
         return dict([(k, s.name) for k,s in self.account.stations.iteritems()])
     
     def current_station(self):
-        station = self.account.current_station
-        if not station: raise Exception, "no current station"
+        station = self._get_current_station()
         return (station.id, station.name) 
     
     def current_song(self):

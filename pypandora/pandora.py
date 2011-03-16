@@ -518,12 +518,12 @@ class Song(object):
         self.publish_message("liking %s" % self)
         self._add_feedback(like=True)
 
-    def dislike(self):
+    def dislike(self, **kwargs):
         _pandora.stop()
         logging.info("disliking %s" % self)
         self.publish_message("disliking %s" % self)
         self._add_feedback(like=False)
-        return self.station.next()
+        return self.station.next(**kwargs)
 
     def __str__(self):
         minutes = int(math.floor(float(self.length) / 60))
