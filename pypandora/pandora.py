@@ -280,7 +280,7 @@ class Station(object):
 
     def dislike(self):
         self.current_song.dislike()
-        self.next()
+        return self.next()
 
     def next(self, **kwargs):
         self.publish_message("changing song...")
@@ -523,7 +523,7 @@ class Song(object):
         logging.info("disliking %s" % self)
         self.publish_message("disliking %s" % self)
         self._add_feedback(like=False)
-        self.station.next()
+        return self.station.next()
 
     def __str__(self):
         minutes = int(math.floor(float(self.length) / 60))

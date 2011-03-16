@@ -32,29 +32,39 @@ class PandoraServerProxy(object):
         
     def next_song(self):
         if not self.account.current_station: raise Exception, "no station selected"
-        song = format_song(self.account.current_station.next())
-        return song
+        song = self.account.current_station.next(finished_cb=station.finish_cb__play_next)
+        return format_song(song)
     
-    def previous_song(self):
-        pass
+    def like_song(self):
+        song = self._get_current_song()
+        song.like()
+        
+    def dislike_song(self):
+        song = self._get_current_song()
+        return format_song(song.dislike())
     
-    def get_station(self, station_id):
+    def _get_station(self, station_id):
         station = self.account.stations.get(station_id, None)
         if not station: raise KeyError, "no station by key %s" % station_id
         return station
+    
+    def _get_current_song(self):
+        song = self.account.current_song
+        if not song: raise Exception, "no current song playing"
+        return song
     
     def stop_song(self):
         self.account.stop()
         
     def get_playlist(self, station_id):
-        station = self.get_station(station_id)
+        station = self._get_station(station_id)
         playlist = []
         for song in station.playlist:
             playlist.append(format_song(song))
         return playlist
         
     def play_station(self, station_id):
-        station = self.get_station(station_id)
+        station = self._get_station(station_id)
         song = station.play(block=False, finished_cb=station.finish_cb__play_next)
         if not song: return False
         return format_song(song)
@@ -69,8 +79,7 @@ class PandoraServerProxy(object):
         return (station.id, station.name) 
     
     def current_song(self):
-        song = self.account.current_song
-        if not song: raise Exception, "no current song playing"
+        song = self._get_current_song()
         return format_song(song)
 
 
