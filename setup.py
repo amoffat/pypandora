@@ -11,7 +11,7 @@ pandora_module = Extension(
 )
 
 setup(
-    name = "pandora",
+    name = "pypandora",
     version = "1.0",
     author = "Andrew Moffat",
     author_email = "andrew.moffat@medtelligent.com",
@@ -21,7 +21,7 @@ setup(
     package_dir = {'':'.'},
     data_files=[('.', ['README','MANIFEST.in']),],
     package_data = {
-        'pandora':
+        'pypandora':
         ['templates/*.xml',],
     },
     include_package_data=True,

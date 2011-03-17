@@ -4,3 +4,4 @@ pypandora.egg-info
 python
 build
 _pandora.so
+dist
