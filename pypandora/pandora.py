@@ -371,6 +371,9 @@ class Song(object):
 
         self._stop_playing = eventlet.queue.Queue(1)
 
+    def set_volume(self, volume):
+        _pandora.set_volume(volume)
+
     @staticmethod
     def _decrypt_url(url):
         """ decrypts the song url where the song stream can be downloaded.  the

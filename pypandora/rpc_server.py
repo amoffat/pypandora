@@ -58,6 +58,10 @@ class PandoraServerProxy(object):
         song = self.account.current_song
         if not song: raise Exception, "no current song playing"
         return song
+
+    def set_volume(self, amt):
+        song = self._get_current_song()
+        song.set_volume(amt)
     
     def stop_song(self):
         self.account.stop()
