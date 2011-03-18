@@ -8,7 +8,6 @@ import urllib
 from os.path import join, abspath, dirname, exists
 import re
 from urlparse import urlsplit
-from collections import deque
 import socket
 import logging
 import math
@@ -238,6 +237,8 @@ class Account(object):
 
 
 class Station(object):    
+    PLAYLIST_LENGTH = 5
+
     def __init__(self, account, stationId, stationIdToken, stationName, **kwargs):
         self.account = account
         self.id = stationId
@@ -245,7 +246,7 @@ class Station(object):
         self.name = stationName
         self.current_song = None
         self._loaded = eventlet.event.Event()
-        self._playlist = deque()
+        self._playlist = []
 
     def publish_message(self, msg):
         self.account.publish_message(msg)
@@ -259,7 +260,7 @@ class Station(object):
         if self.account.current_station: self.account.current_station.stop()
 
         logging.info("playing station %s" % self.name)
-        self.current_song = self.playlist.popleft()
+        self.current_song = self.playlist.pop(0)
         self.account.current_song = self.current_song
         self.account.current_station = self
         self.current_song.play(block, **kwargs)
@@ -292,7 +293,7 @@ class Station(object):
         to see if it's empty.  if it's not, return it, if it is, get more
         songs for the station playlist """
 
-        if self._playlist: return self._playlist
+        if len(self._playlist) >= Station.PLAYLIST_LENGTH: return self._playlist
 
         format = "mp3"
         get = {
@@ -309,7 +310,6 @@ class Station(object):
         xml = self.account.connection.send(get, body)
 
         song_params = {}
-        self._playlist = deque()
 
         for el in xml.findall("params/param/value/array/data/value"):
             for member in el.findall("struct/member"):
@@ -318,8 +318,7 @@ class Station(object):
             song = Song(self, **song_params)
             self._playlist.append(song)
 
-        #self._playlist[0].load()
-        return self._playlist
+        return self._playlist[:Station.PLAYLIST_LENGTH]
     playlist = property(_get_playlist)
 
     @staticmethod
