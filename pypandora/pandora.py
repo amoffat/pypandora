@@ -260,6 +260,7 @@ class Station(object):
         if self.account.current_station: self.account.current_station.stop()
 
         logging.info("playing station %s" % self.name)
+
         self.current_song = self.playlist.pop(0)
         self.account.current_song = self.current_song
         self.account.current_station = self
@@ -316,9 +317,10 @@ class Station(object):
                 c = member.getchildren()
                 song_params[c[0].text] = c[1].text
             song = Song(self, **song_params)
+            print "appending %s" % song
             self._playlist.append(song)
 
-        return self._playlist[:Station.PLAYLIST_LENGTH]
+        return self._playlist
     playlist = property(_get_playlist)
 
     @staticmethod
