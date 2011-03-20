@@ -319,6 +319,13 @@ class Station(object):
             song = Song(self, **song_params)
             self._playlist.append(song)
 
+        # if we can't get a playlist, we might need to reauth
+        if not self._playlist:
+            self.account.login()
+            self._get_playlist()
+
+            if not self._playlist: raise Exception, "can't get playlist!"
+
         return self._playlist
     playlist = property(_get_playlist)
 
