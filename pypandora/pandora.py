@@ -306,7 +306,7 @@ class Station(object):
 
         if len(self._playlist) >= Station.PLAYLIST_LENGTH: return self._playlist
 
-        format = "mp3"
+        format = "mp3-hifi" # always try to select highest quality sound
         get = {
             "method": "getFragment", "lid": self.account.connection.lid,
             "arg1": self.id, "arg2": 0, "arg3": "", "arg4": "", "arg5": format,
