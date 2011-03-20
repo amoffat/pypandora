@@ -317,7 +317,6 @@ class Station(object):
                 c = member.getchildren()
                 song_params[c[0].text] = c[1].text
             song = Song(self, **song_params)
-            print "appending %s" % song
             self._playlist.append(song)
 
         return self._playlist
