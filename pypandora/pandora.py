@@ -37,7 +37,8 @@ class Connection(object):
     _pandora_port = 80
     _pandora_rpc_path = "/radio/xmlrpc/v%d" % _pandora_protocol_version
 
-    def __init__(self):
+    def __init__(self, debug=False):
+        self.debug = debug
         self.rid = "%07dP" % (time.time() % 10000000) # route id
         self.timeoffset = time.time()
         self.token = None
@@ -81,7 +82,11 @@ class Connection(object):
         url = "%s?%s" % (self._pandora_rpc_path, urllib.urlencode(ordered))
 
         logging.debug("talking to pandora %s" % url)
-        #logging.debug("sending data %s" % self.dump_xml(body))
+
+        # debug logging?
+        if self.debug:
+            debug_logger = logging.getLogger("debug_logger")
+            debug_logger.debug("sending data %s" % self.dump_xml(body))
 
         body = _pandora.encrypt(body)
         conn.request("POST", url, body, headers)
@@ -90,7 +95,11 @@ class Connection(object):
         if resp.status != 200: raise Exception(resp.reason)
 
         ret_data = resp.read()
-        #logging.debug("returned data %s" % self.dump_xml(ret_data))
+
+        # debug logging?
+        if self.debug:
+            debug_logger = logging.getLogger("debug_logger")
+            debug_logger.debug("returned data %s" % self.dump_xml(ret_data))
 
         conn.close()
 
@@ -173,8 +182,8 @@ class Connection(object):
 
 
 class Account(object):
-    def __init__(self, email, password, mp3_cache_dir=None):
-        self.connection = Connection()        
+    def __init__(self, email, password, mp3_cache_dir=None, debug=False):
+        self.connection = Connection(debug)        
         self.email = email
         self.password = password
         self._stations = {}
@@ -238,6 +247,7 @@ class Account(object):
 
 class Station(object):    
     PLAYLIST_LENGTH = 5
+    PRELOAD_OFFSET = 60
 
     def __init__(self, account, stationId, stationIdToken, stationName, **kwargs):
         self.account = account
@@ -465,7 +475,7 @@ class Song(object):
                     total, pos = stats
                     self.progress = pos
 
-                    if pos + 30 >= total and not preloading_next:
+                    if pos + self.station.PRELOAD_OFFSET >= total and not preloading_next:
                         preloading_next = True
                         self.station.preload_next()
 
@@ -558,12 +568,20 @@ if __name__ == "__main__":
     parser = OptionParser(usage=("%prog [options]"))
     parser.add_option('-u', "--username", dest="user", help="your Pandora username (your email)")
     parser.add_option('-p', '--password', dest='password', help='your Pandora password')
+    parser.add_option('-d', '--debug', dest='debug', action="store_true", default=False, help='debug XML to/from Pandora')
     (options, args) = parser.parse_args()
 
     if not options.password or not options.user:
         parser.error("Please provide your username and password")
 
-    account = Account(options.user, options.password)
+    if options.debug:
+        debug_logger = logging.getLogger("debug_logger")
+        debug_logger.setLevel(logging.DEBUG)
+        lh = logging.FileHandler(join(gettempdir(), "pypandora_debugging.log"))
+        lh.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        debug_logger.addHandler(lh)
+
+    account = Account(options.user, options.password, debug=options.debug)
 
     # play a random station
     from random import randint
