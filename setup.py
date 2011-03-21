@@ -15,14 +15,13 @@ setup(
     version = "1.0",
     author = "Andrew Moffat",
     author_email = "andrew.moffat@medtelligent.com",
-    url = "",
+    url = "https://github.com/amoffat/pypandora",
 
     packages = find_packages('.'),
     package_dir = {'':'.'},
     data_files=[('.', ['README','MANIFEST.in']),],
     package_data = {
-        'pypandora':
-        ['templates/*.xml',],
+        'pypandora': ['templates/*.xml',],
     },
     include_package_data=True,
 
