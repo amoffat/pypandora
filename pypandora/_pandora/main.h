@@ -8,15 +8,18 @@
 #ifndef MAIN_H_
 #define MAIN_H_
 
-static PyObject* pandora_decrypt(PyObject *, PyObject *);
-static PyObject* pandora_encrypt(PyObject *, PyObject *);
-static PyObject* pandora_playMusic(PyObject *, PyObject *);
-static PyObject* pandora_getMusicStats(PyObject *, PyObject *);
-static PyObject* pandora_musicIsPlaying(PyObject *, PyObject *);
-static PyObject* pandora_pauseMusic(PyObject *, PyObject *);
-static PyObject* pandora_setMusicSpeed(PyObject *, PyObject *);
-static PyObject* pandora_setVolume(PyObject *, PyObject *);
-static PyObject* pandora_stopMusic(PyObject *, PyObject *);
-static PyObject* pandora_unpauseMusic(PyObject *, PyObject *);
+#define DEF_PANDORA_FN(name) static PyObject* pandora_##name(PyObject *, PyObject *)
+
+DEF_PANDORA_FN(decrypt);
+DEF_PANDORA_FN(encrypt);
+DEF_PANDORA_FN(playMusic);
+DEF_PANDORA_FN(getMusicStats);
+DEF_PANDORA_FN(musicIsPlaying);
+DEF_PANDORA_FN(pauseMusic);
+DEF_PANDORA_FN(setMusicSpeed);
+DEF_PANDORA_FN(getVolume);
+DEF_PANDORA_FN(setVolume);
+DEF_PANDORA_FN(stopMusic);
+DEF_PANDORA_FN(unpauseMusic);
 
 #endif /* MAIN_H_ */

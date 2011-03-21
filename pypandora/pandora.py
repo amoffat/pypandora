@@ -27,6 +27,10 @@ TEMPLATE_DIR = join(THIS_DIR, "templates")
 
 
 
+def get_volume(): return _pandora.get_volume()
+def set_volume(volume): return _pandora.set_volume(volume)
+
+
 
 class Connection(object):
     """
@@ -394,9 +398,6 @@ class Song(object):
         self.progress = 0 # number of seconds that have passed in playing
 
         self._stop_playing = eventlet.queue.Queue(1)
-
-    def set_volume(self, volume):
-        _pandora.set_volume(volume)
 
     @staticmethod
     def _decrypt_url(url):

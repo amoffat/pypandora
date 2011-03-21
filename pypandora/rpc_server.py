@@ -38,6 +38,12 @@ class PandoraServerProxy(object):
     def like_song(self):
         song = self._get_current_song()
         song.like()
+
+    def get_volume(self):
+        return pypandora.get_volume()
+
+    def set_volume(self, volume):
+        return pypandora.set_volume(volume)
         
     def dislike_song(self):
         song = self._get_current_song()
@@ -59,10 +65,6 @@ class PandoraServerProxy(object):
         if not song: raise Exception, "no current song playing"
         return song
 
-    def set_volume(self, amt):
-        song = self._get_current_song()
-        song.set_volume(amt)
-    
     def stop_song(self):
         self.account.stop()
         

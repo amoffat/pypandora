@@ -6,6 +6,18 @@
 #include <time.h>
 
 
+#ifndef MIN
+#define MIN(a, b) ((a) > (b) ? (b) : (a))
+#endif
+
+#ifndef MAX
+#define MAX(a, b) ((a) < (b) ? (b) : (a))
+#endif
+
+#define CLAMP(x, lo, hi) MIN((hi), MAX((lo), (x)))
+
+
+
 static FMOD_SYSTEM* sound_system = NULL;
 static FMOD_SOUND* music = NULL;
 static FMOD_CHANNEL* channel = 0;
@@ -23,6 +35,7 @@ static PyMethodDef pandora_methods[] = {
     {"is_playing",  pandora_musicIsPlaying, METH_VARARGS, "See if anything is playing"},
     {"set_speed", pandora_setMusicSpeed, METH_VARARGS, "Set the music speed"},
     {"set_volume", pandora_setVolume, METH_VARARGS, "Set the volume"},
+    {"get_volume", pandora_getVolume, METH_VARARGS, "Get the volume"},
     {"stats",  pandora_getMusicStats, METH_VARARGS, "Get music stats"},
     {NULL, NULL, 0, NULL}
 };
@@ -47,6 +60,7 @@ static PyObject* pandora_decrypt(PyObject *self, PyObject *args) {
     return Py_BuildValue("s", xml);
 }
 
+
 static PyObject* pandora_getMusicStats(PyObject *self, PyObject *args) {
     if (!channel) Py_RETURN_NONE;
 
@@ -58,17 +72,33 @@ static PyObject* pandora_getMusicStats(PyObject *self, PyObject *args) {
     return Py_BuildValue("(ii)", (int)((float)length / 1000.0f), (int)((float)pos / 1000.0f));
 }
 
-static PyObject* pandora_setVolume(PyObject *self, PyObject *args) {
-    if (!channel) Py_RETURN_NONE;
 
+static PyObject* pandora_setVolume(PyObject *self, PyObject *args) {
     if (!PyArg_ParseTuple(args, "f", &volume)) return NULL;
+
+    volume = CLAMP(volume, 0.0, 1.0);
+
+    if (!channel) return Py_BuildValue("f", volume);
 
     FMOD_RESULT res;
     res = FMOD_Channel_SetVolume(channel, volume);
     pandora_fmod_errcheck(res);
 
-    Py_RETURN_NONE;
+    return Py_BuildValue("f", volume);
 }
+
+
+static PyObject* pandora_getVolume(PyObject *self, PyObject *args) {
+    if (!channel) return Py_BuildValue("f", volume);
+
+    FMOD_RESULT res;
+
+    res = FMOD_Channel_GetVolume(channel, &volume);
+    pandora_fmod_errcheck(res);
+
+    return Py_BuildValue("f", volume);
+}
+
 
 static PyObject* pandora_musicIsPlaying(PyObject *self, PyObject *args) {
     FMOD_BOOL isplaying = 0;
@@ -83,6 +113,7 @@ static PyObject* pandora_musicIsPlaying(PyObject *self, PyObject *args) {
     else {Py_RETURN_FALSE;}
 }
 
+
 static PyObject* pandora_setMusicSpeed(PyObject *self, PyObject *args) {
     FMOD_RESULT res;
 
@@ -95,6 +126,7 @@ static PyObject* pandora_setMusicSpeed(PyObject *self, PyObject *args) {
     }
     Py_RETURN_NONE;
 }
+
 
 static PyObject* pandora_stopMusic(PyObject *self, PyObject *args) {
     FMOD_RESULT res;
@@ -113,6 +145,7 @@ static PyObject* pandora_stopMusic(PyObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+
 static PyObject* pandora_pauseMusic(PyObject *self, PyObject *args) {
     FMOD_RESULT res;
     FMOD_BOOL isplaying;
@@ -127,6 +160,7 @@ static PyObject* pandora_pauseMusic(PyObject *self, PyObject *args) {
     }
     Py_RETURN_NONE;
 }
+
 
 static PyObject* pandora_unpauseMusic(PyObject *self, PyObject *args) {
     FMOD_RESULT res;
@@ -174,6 +208,7 @@ static PyObject* pandora_playMusic(PyObject *self, PyObject *args) {
     return Py_BuildValue("i", (int)((float)length / 1000.0f));
 }
 
+
 static PyObject* pandora_encrypt(PyObject *self, PyObject *args) {
     const char *xml;
     char *payload;
@@ -184,11 +219,13 @@ static PyObject* pandora_encrypt(PyObject *self, PyObject *args) {
     return Py_BuildValue("s", payload);
 }
 
+
 static void cleanup() {
     (void)FMOD_Sound_Release(music);
     (void)FMOD_System_Close(sound_system);
     (void)FMOD_System_Release(sound_system);
 }
+
 
 PyMODINIT_FUNC init_pandora(void) {
     FMOD_System_Create(&sound_system);
