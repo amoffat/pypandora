@@ -22,7 +22,7 @@ static FMOD_SYSTEM* sound_system = NULL;
 static FMOD_SOUND* music = NULL;
 static FMOD_CHANNEL* channel = 0;
 static float original_frequency = 0;
-static float volume = 1.0;
+static float volume = 0.5f;
 
 
 static PyMethodDef pandora_methods[] = {
