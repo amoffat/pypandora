@@ -312,29 +312,36 @@ class Station(object):
             "arg1": self.id, "arg2": 0, "arg3": "", "arg4": "", "arg5": format,
             "arg6": 0, "arg7": 0
         }
-        body = self.account.connection.get_template("get_playlist", {
-            "timestamp": int(time.time() - self.account.connection.timeoffset),
-            "token": self.account.connection.token,
-            "station_id": self.id,
-            "format": format
-        })
-        xml = self.account.connection.send(get, body)
 
-        song_params = {}
+        got_playlist = False
+        get_playlist_tries = 2
 
-        for el in xml.findall("params/param/value/array/data/value"):
-            for member in el.findall("struct/member"):
-                c = member.getchildren()
-                song_params[c[0].text] = c[1].text
-            song = Song(self, **song_params)
-            self._playlist.append(song)
+        while not got_playlist and get_playlist_tries:
+            body = self.account.connection.get_template("get_playlist", {
+                "timestamp": int(time.time() - self.account.connection.timeoffset),
+                "token": self.account.connection.token,
+                "station_id": self.id,
+                "format": format
+            })
+            xml = self.account.connection.send(get, body)
 
-        # if we can't get a playlist, we might need to reauth
-        if not self._playlist:
-            self.account.login()
-            self._get_playlist()
+            song_params = {}
 
-            if not self._playlist: raise Exception, "can't get playlist!"
+            for el in xml.findall("params/param/value/array/data/value"):
+                for member in el.findall("struct/member"):
+                    c = member.getchildren()
+                    song_params[c[0].text] = c[1].text
+                song = Song(self, **song_params)
+                self._playlist.append(song)
+
+            if self._playlist:
+                got_playlist = True
+            else:
+                get_playlist_tries -= 1
+                logging.error("failed to get playlist, trying %d more times" % get_playlist_tries)
+                self.account.login()
+
+        if not got_playlist: raise Exception, "can't get playlist!"
 
         return self._playlist
     playlist = property(_get_playlist)
