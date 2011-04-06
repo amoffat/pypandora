@@ -13,6 +13,7 @@
 DEF_PANDORA_FN(decrypt);
 DEF_PANDORA_FN(encrypt);
 DEF_PANDORA_FN(playMusic);
+DEF_PANDORA_FN(playCue);
 DEF_PANDORA_FN(getMusicStats);
 DEF_PANDORA_FN(musicIsPlaying);
 DEF_PANDORA_FN(pauseMusic);

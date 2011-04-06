@@ -186,17 +186,19 @@ static PyObject* pandora_unpauseMusic(PyObject *self, PyObject *args) {
 
 static PyObject* pandora_playCue(PyObject *self, PyObject *args) {
     const char *cue_file;
+    FMOD_RESULT res;
 
     if (!PyArg_ParseTuple(args, "s", &cue_file)) return NULL;
 
     res = FMOD_System_CreateSound(sound_system, cue_file, FMOD_SOFTWARE, 0, &cue);
-    PyMem_Free(cue_file); // avoid memory leaks
+    PyMem_Free((void *)cue_file); // avoid memory leaks
     pandora_fmod_errcheck(res);
     res = FMOD_System_PlaySound(sound_system, FMOD_CHANNEL_FREE, music, 0, &cue_channel);
     pandora_fmod_errcheck(res);
 
     Py_RETURN_NONE;
 }
+
 
 static PyObject* pandora_playMusic(PyObject *self, PyObject *args) {
     const char *song_file;
@@ -212,7 +214,7 @@ static PyObject* pandora_playMusic(PyObject *self, PyObject *args) {
         pandora_fmod_errcheck(res);
     }
     res = FMOD_System_CreateSound(sound_system, song_file, FMOD_SOFTWARE, 0, &music);
-    PyMem_Free(song_file); // avoid memory leaks
+    PyMem_Free((void *)song_file); // avoid memory leaks
     pandora_fmod_errcheck(res);
     res = FMOD_System_PlaySound(sound_system, FMOD_CHANNEL_REUSE, music, 0, &music_channel);
     pandora_fmod_errcheck(res);
@@ -242,12 +244,12 @@ static PyObject* pandora_encrypt(PyObject *self, PyObject *args) {
     if (!PyArg_ParseTuple(args, "s", &xml)) return NULL;
 
     payload = PianoEncryptString(xml);
-    PyMem_Free(xml); // avoid memory leaks
+    PyMem_Free((void *)xml); // avoid memory leaks
     return Py_BuildValue("s", payload);
 }
 
 
-static void cleanup() {
+static void pandora_cleanup(void) {
     if (music) (void)FMOD_Sound_Release(music);
     if (cue) (void)FMOD_Sound_Release(cue);
 
@@ -262,5 +264,5 @@ PyMODINIT_FUNC init_pandora(void) {
 
     (void) Py_InitModule("_pandora", pandora_methods);
 
-    Py_AtExit(cleanup);
+    Py_AtExit(pandora_cleanup);
 }
