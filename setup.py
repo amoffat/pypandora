@@ -21,7 +21,7 @@ setup(
     package_dir = {'':'.'},
     data_files=[('.', ['README','MANIFEST.in']),],
     package_data = {
-        'pypandora': ['templates/*.xml',],
+        'pypandora': ['templates/*.xml', "cues/*"],
     },
     include_package_data=True,
 
