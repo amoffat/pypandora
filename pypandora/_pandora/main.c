@@ -192,6 +192,7 @@ static PyObject* pandora_playMusic(PyObject *self, PyObject *args) {
         pandora_fmod_errcheck(res);
     }
     res = FMOD_System_CreateSound(sound_system, song_file, FMOD_SOFTWARE, 0, &music);
+    PyMem_Free(song_file); // avoid memory leaks
     pandora_fmod_errcheck(res);
     res = FMOD_System_PlaySound(sound_system, FMOD_CHANNEL_FREE, music, 0, &channel);
     pandora_fmod_errcheck(res);
@@ -216,6 +217,7 @@ static PyObject* pandora_encrypt(PyObject *self, PyObject *args) {
     if (!PyArg_ParseTuple(args, "s", &xml)) return NULL;
 
     payload = PianoEncryptString(xml);
+    PyMem_Free(xml); // avoid memory leaks
     return Py_BuildValue("s", payload);
 }
 
