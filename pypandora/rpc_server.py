@@ -3,8 +3,13 @@ eventlet.monkey_patch()
 from SimpleXMLRPCServer import SimpleXMLRPCServer
 from SimpleXMLRPCServer import SimpleXMLRPCRequestHandler
 import pypandora
+import _pandora
 import logging
+from os.path import join, dirname, abspath
 
+
+THIS_DIR = dirname(abspath(__file__))
+CUE_DIR = join(THIS_DIR, "cues")
 
 
 def format_song(song):
@@ -36,6 +41,7 @@ class PandoraServerProxy(object):
         return format_song(song)
     
     def like_song(self):
+        _pandora.play_cue(join(CUE_DIR, "glass.ogg"))
         song = self._get_current_song()
         song.like()
 
@@ -46,6 +52,7 @@ class PandoraServerProxy(object):
         return pypandora.set_volume(volume)
         
     def dislike_song(self):
+        _pandora.play_cue(join(CUE_DIR, "sonar.ogg"))
         song = self._get_current_song()
         station = self._get_current_station()
         return format_song(song.dislike(finished_cb=station.finish_cb__play_next))

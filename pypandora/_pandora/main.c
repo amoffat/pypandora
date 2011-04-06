@@ -191,9 +191,10 @@ static PyObject* pandora_playCue(PyObject *self, PyObject *args) {
     if (!PyArg_ParseTuple(args, "s", &cue_file)) return NULL;
 
     res = FMOD_System_CreateSound(sound_system, cue_file, FMOD_SOFTWARE, 0, &cue);
-    PyMem_Free((void *)cue_file); // avoid memory leaks
     pandora_fmod_errcheck(res);
-    res = FMOD_System_PlaySound(sound_system, FMOD_CHANNEL_FREE, music, 0, &cue_channel);
+    res = FMOD_System_PlaySound(sound_system, FMOD_CHANNEL_FREE, cue, 0, &cue_channel);
+    pandora_fmod_errcheck(res);
+    res = FMOD_Channel_SetVolume(cue_channel, 1.0);
     pandora_fmod_errcheck(res);
 
     Py_RETURN_NONE;
@@ -214,7 +215,6 @@ static PyObject* pandora_playMusic(PyObject *self, PyObject *args) {
         pandora_fmod_errcheck(res);
     }
     res = FMOD_System_CreateSound(sound_system, song_file, FMOD_SOFTWARE, 0, &music);
-    PyMem_Free((void *)song_file); // avoid memory leaks
     pandora_fmod_errcheck(res);
     res = FMOD_System_PlaySound(sound_system, FMOD_CHANNEL_REUSE, music, 0, &music_channel);
     pandora_fmod_errcheck(res);
@@ -224,11 +224,6 @@ static PyObject* pandora_playMusic(PyObject *self, PyObject *args) {
 
     res = FMOD_Channel_SetVolume(music_channel, volume);
     pandora_fmod_errcheck(res);
-
-    if (cue_channel) {
-        res = FMOD_Channel_SetVolume(cue_channel, volume);
-        pandora_fmod_errcheck(res);
-    }
 
     unsigned int length;
     res = FMOD_Sound_GetLength(music, &length, FMOD_TIMEUNIT_MS);
@@ -244,7 +239,6 @@ static PyObject* pandora_encrypt(PyObject *self, PyObject *args) {
     if (!PyArg_ParseTuple(args, "s", &xml)) return NULL;
 
     payload = PianoEncryptString(xml);
-    PyMem_Free((void *)xml); // avoid memory leaks
     return Py_BuildValue("s", payload);
 }
 
