@@ -115,13 +115,6 @@ static PyObject* pandora_setVolume(PyObject *self, PyObject *args) {
 
 
 static PyObject* pandora_getVolume(PyObject *self, PyObject *args) {
-    if (!music_channel) return Py_BuildValue("f", volume);
-
-    FMOD_RESULT res;
-
-    res = FMOD_Channel_GetVolume(music_channel, &volume);
-    pandora_fmod_errcheck(res);
-
     return Py_BuildValue("f", volume);
 }
 
