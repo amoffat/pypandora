@@ -378,6 +378,7 @@ class Song(object):
 
         try: self.gain = float(fileGain)
         except: self.gain = 0.0
+
         self.url = self._decrypt_url(audioURL)
         self.length = 0 # will be populated when played
 
@@ -471,7 +472,7 @@ class Song(object):
             # stop anything that is currently playing
             _pandora.stop()
 
-            self.length = _pandora.play(self.load(block=True))            
+            self.length = _pandora.play(self.load(block=True), self.gain)            
             logging.info("playing %s" % self)
             self.publish_message("playing %s" % self)
 
@@ -556,7 +557,7 @@ class Song(object):
     def __str__(self):
         minutes = int(math.floor(float(self.length) / 60))
         seconds = int(self.length - (minutes * 60))
-        return "\"%s\" by %s (%d:%02d)" % (self.title, self.artist, minutes, seconds)
+        return "\"%s\" by %s (%d:%02d) (%+.2f)" % (self.title, self.artist, minutes, seconds, self.gain)
 
     def __repr__(self):
         return "<Song \"%s\" by \"%s\">" % (self.title, self.artist)

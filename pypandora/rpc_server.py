@@ -15,8 +15,9 @@ CUE_DIR = join(THIS_DIR, "cues")
 
 
 sound_cue_mapping = {
-    "upvote": "glass.ogg",
-    "downvote": "sonar.ogg",
+    "upvote": "upvote.ogg",
+    "downvote": "downvote.ogg",
+    "station": "station_vote.ogg"
 }
 
 
@@ -61,7 +62,7 @@ class PandoraServerProxy(object):
     def play_sound(self, sound):
         sound_file = sound_cue_mapping.get(sound, None)
         if not sound_file: raise Exception, "sound file %s not found" % sound
-        _pandora.play_cue(join(CUE_DIR, sound_file))
+        _pandora.play_sound(join(CUE_DIR, sound_file))
         
     def dislike_song(self):
         song = self._get_current_song()

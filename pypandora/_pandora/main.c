@@ -16,22 +16,33 @@
 
 #define CLAMP(x, lo, hi) MIN((hi), MAX((lo), (x)))
 
-
+#define GAIN_TARGET 89.0f
 
 static FMOD_SYSTEM* sound_system = NULL;
 static FMOD_SOUND* music = NULL;
-static FMOD_SOUND* cue = NULL;
 static FMOD_CHANNEL* music_channel = 0;
-static FMOD_CHANNEL* cue_channel = 0;
+static FMOD_CHANNEL* fx_channel = 0;
 static float original_frequency = 0;
 static float volume = 0.5f;
+static float current_gain = 0.0f;
+
+
+
+typedef struct {
+    const char* filename;
+    FMOD_SOUND* sound;
+} pandora_soundEffect;
+
+
+static pandora_soundEffect** sound_effects = NULL;
+static int num_effects = 0;
 
 
 static PyMethodDef pandora_methods[] = {
     {"decrypt",  pandora_decrypt, METH_VARARGS, "Decrypt a string from pandora"},
     {"encrypt",  pandora_encrypt, METH_VARARGS, "Encrypt a string from pandora"},
     {"play",  pandora_playMusic, METH_VARARGS, "Play a song"},
-    {"play_cue",  pandora_playCue, METH_VARARGS, "Play an arbitrary sound effect"},
+    {"play_sound",  pandora_playSound, METH_VARARGS, "Play an arbitrary sound effect"},
     {"pause",  pandora_pauseMusic, METH_VARARGS, "Pause music"},
     {"resume",  pandora_unpauseMusic, METH_VARARGS, "Resume music"},
     {"stop",  pandora_stopMusic, METH_VARARGS, "Stop music"},
@@ -76,22 +87,28 @@ static PyObject* pandora_getMusicStats(PyObject *self, PyObject *args) {
 }
 
 
-static PyObject* pandora_setVolume(PyObject *self, PyObject *args) {
-    if (!PyArg_ParseTuple(args, "f", &volume)) return NULL;
-
+static float _pandora_setVolume(float new_volume) {
+    new_volume = CLAMP(new_volume, 0.0, 1.0);
+    // adjust for the gain
+    volume = new_volume * ((GAIN_TARGET + current_gain) / GAIN_TARGET);
     volume = CLAMP(volume, 0.0, 1.0);
 
-    if (!music_channel) return Py_BuildValue("f", volume);
-
     FMOD_RESULT res;
-    res = FMOD_Channel_SetVolume(music_channel, volume);
-    pandora_fmod_errcheck(res);
-    if (cue_channel) {
-        res = FMOD_Channel_SetVolume(cue_channel, volume);
+
+    if (music_channel) {
+        res = FMOD_Channel_SetVolume(music_channel, volume);
         pandora_fmod_errcheck(res);
     }
 
-    return Py_BuildValue("f", volume);
+    return new_volume;
+}
+
+static PyObject* pandora_setVolume(PyObject *self, PyObject *args) {
+    float new_volume;
+
+    if (!PyArg_ParseTuple(args, "f", &new_volume)) return NULL;
+    new_volume =_pandora_setVolume(new_volume);
+    return Py_BuildValue("f", new_volume);
 }
 
 
@@ -184,17 +201,38 @@ static PyObject* pandora_unpauseMusic(PyObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
-static PyObject* pandora_playCue(PyObject *self, PyObject *args) {
-    const char *cue_file;
+static PyObject* pandora_playSound(PyObject *self, PyObject *args) {
+    const char *filename;
     FMOD_RESULT res;
 
-    if (!PyArg_ParseTuple(args, "s", &cue_file)) return NULL;
+    if (!PyArg_ParseTuple(args, "s", &filename)) return NULL;
 
-    res = FMOD_System_CreateSound(sound_system, cue_file, FMOD_SOFTWARE, 0, &cue);
+    pandora_soundEffect* effect;
+    int found = 0, i = 0;
+    for (i=0; i<num_effects; ++i) {
+        effect = sound_effects[i];
+        if (strcmp(effect->filename, filename) == 0) {
+            found = 1; break;
+        }
+    }
+
+    if (!found) {
+        effect = (pandora_soundEffect*)malloc(sizeof(pandora_soundEffect));
+        effect->filename = (char *)malloc(strlen(filename) + 1);
+        (void)strcpy(effect->filename, filename);
+
+        sound_effects = (pandora_soundEffect**)realloc(sound_effects, sizeof(pandora_soundEffect *) * ++num_effects);
+        if (NULL == sound_effects) return NULL;
+
+        res = FMOD_System_CreateSound(sound_system, effect->filename, FMOD_SOFTWARE, 0, &effect->sound);
+        pandora_fmod_errcheck(res);
+
+        sound_effects[num_effects - 1] = effect;
+    }
+
+    res = FMOD_System_PlaySound(sound_system, FMOD_CHANNEL_FREE, effect->sound, 0, &fx_channel);
     pandora_fmod_errcheck(res);
-    res = FMOD_System_PlaySound(sound_system, FMOD_CHANNEL_FREE, cue, 0, &cue_channel);
-    pandora_fmod_errcheck(res);
-    res = FMOD_Channel_SetVolume(cue_channel, 1.0);
+    res = FMOD_Channel_SetVolume(fx_channel, CLAMP(1.5 * volume, 0.0, 1.0));
     pandora_fmod_errcheck(res);
 
     Py_RETURN_NONE;
@@ -204,7 +242,7 @@ static PyObject* pandora_playCue(PyObject *self, PyObject *args) {
 static PyObject* pandora_playMusic(PyObject *self, PyObject *args) {
     const char *song_file;
 
-    if (!PyArg_ParseTuple(args, "s", &song_file)) return NULL;
+    if (!PyArg_ParseTuple(args, "sf", &song_file, &current_gain)) return NULL;
 
     FMOD_RESULT res;
     if (music != NULL) {
@@ -222,8 +260,7 @@ static PyObject* pandora_playMusic(PyObject *self, PyObject *args) {
     res = FMOD_Channel_GetFrequency(music_channel, &original_frequency);
     pandora_fmod_errcheck(res);
 
-    res = FMOD_Channel_SetVolume(music_channel, volume);
-    pandora_fmod_errcheck(res);
+    _pandora_setVolume(volume);
 
     unsigned int length;
     res = FMOD_Sound_GetLength(music, &length, FMOD_TIMEUNIT_MS);
@@ -245,7 +282,13 @@ static PyObject* pandora_encrypt(PyObject *self, PyObject *args) {
 
 static void pandora_cleanup(void) {
     if (music) (void)FMOD_Sound_Release(music);
-    if (cue) (void)FMOD_Sound_Release(cue);
+
+    int i;
+    for (i=0; i<num_effects; ++i) {
+        (void)FMOD_Sound_Release(sound_effects[i]->sound);
+        free(sound_effects[i]->filename);
+    }
+    if (sound_effects) free(sound_effects);
 
     (void)FMOD_System_Close(sound_system);
     (void)FMOD_System_Release(sound_system);
