@@ -232,7 +232,7 @@ static PyObject* pandora_playSound(PyObject *self, PyObject *args) {
 
     res = FMOD_System_PlaySound(sound_system, FMOD_CHANNEL_FREE, effect->sound, 0, &fx_channel);
     pandora_fmod_errcheck(res);
-    res = FMOD_Channel_SetVolume(fx_channel, CLAMP(1.5 * volume, 0.0, 1.0));
+    res = FMOD_Channel_SetVolume(fx_channel, CLAMP(4 * volume, 0.0, 1.0));
     pandora_fmod_errcheck(res);
 
     Py_RETURN_NONE;
