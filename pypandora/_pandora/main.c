@@ -89,14 +89,16 @@ static PyObject* pandora_getMusicStats(PyObject *self, PyObject *args) {
 
 static float _pandora_setVolume(float new_volume) {
     new_volume = CLAMP(new_volume, 0.0, 1.0);
+    volume = new_volume;
+
     // adjust for the gain
-    volume = new_volume * ((GAIN_TARGET + current_gain) / GAIN_TARGET);
-    volume = CLAMP(volume, 0.0, 1.0);
+    new_volume = new_volume * ((GAIN_TARGET + current_gain) / GAIN_TARGET);
+    new_volume = CLAMP(new_volume, 0.0, 1.0);
 
     FMOD_RESULT res;
 
     if (music_channel) {
-        res = FMOD_Channel_SetVolume(music_channel, volume);
+        res = FMOD_Channel_SetVolume(music_channel, new_volume);
         pandora_fmod_errcheck(res);
     }
 
