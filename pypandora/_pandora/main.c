@@ -116,6 +116,7 @@ static PyObject* pandora_setVolume(PyObject *self, PyObject *args) {
 
 static PyObject* pandora_getVolume(PyObject *self, PyObject *args) {
     return Py_BuildValue("f", volume);
+}
 
 static PyObject* pandora_musicIsPlaying(PyObject *self, PyObject *args) {
     FMOD_BOOL isplaying = 0;
