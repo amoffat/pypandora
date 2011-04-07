@@ -23,4 +23,6 @@ DEF_PANDORA_FN(setVolume);
 DEF_PANDORA_FN(stopMusic);
 DEF_PANDORA_FN(unpauseMusic);
 
+static float _pandora_setVolume(float new_volume);
+
 #endif /* MAIN_H_ */
