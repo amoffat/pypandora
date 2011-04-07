@@ -12,6 +12,14 @@ THIS_DIR = dirname(abspath(__file__))
 CUE_DIR = join(THIS_DIR, "cues")
 
 
+
+
+sound_cue_mapping = {
+    "upvote": "glass.ogg",
+    "downvote": "sonar.ogg",
+}
+
+
 def format_song(song):
     """ helper function for formatting songs over rpc """
     return {
@@ -41,7 +49,6 @@ class PandoraServerProxy(object):
         return format_song(song)
     
     def like_song(self):
-        _pandora.play_cue(join(CUE_DIR, "glass.ogg"))
         song = self._get_current_song()
         song.like()
 
@@ -50,9 +57,13 @@ class PandoraServerProxy(object):
 
     def set_volume(self, volume):
         return pypandora.set_volume(volume)
+
+    def play_sound(self, sound):
+        sound_file = sound_cue_mapping.get(sound, None)
+        if not sound_file: raise Exception, "sound file %s not found" % sound
+        _pandora.play_cue(join(CUE_DIR, sound_file))
         
     def dislike_song(self):
-        _pandora.play_cue(join(CUE_DIR, "sonar.ogg"))
         song = self._get_current_song()
         station = self._get_current_station()
         return format_song(song.dislike(finished_cb=station.finish_cb__play_next))
