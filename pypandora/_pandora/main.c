@@ -283,7 +283,7 @@ static void pandora_cleanup(void) {
     int i;
     for (i=0; i<num_effects; ++i) {
         (void)FMOD_Sound_Release(sound_effects[i]->sound);
-        free(sound_effects[i]->filename);
+        free((char *)sound_effects[i]->filename);
     }
     if (sound_effects) free(sound_effects);
 
