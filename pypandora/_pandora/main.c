@@ -212,8 +212,7 @@ static PyObject* pandora_playSound(PyObject *self, PyObject *args) {
 
     if (!found) {
         effect = (pandora_soundEffect*)malloc(sizeof(pandora_soundEffect));
-        effect->filename = (char *)malloc(strlen(filename) + 1);
-        (void)strcpy(effect->filename, filename);
+        effect->filename = strdup(filename);
 
         sound_effects = (pandora_soundEffect**)realloc(sound_effects, sizeof(pandora_soundEffect *) * ++num_effects);
         if (NULL == sound_effects) return NULL;
