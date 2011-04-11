@@ -204,6 +204,9 @@ class Account(object):
     def stop(self):
         self.current_station.stop()
 
+    def pause(self):
+        self.current_station.pause()
+
     def publish_message(self, msg):
         for name, subscriber in self._message_subscribers.iteritems():
             subscriber(msg)

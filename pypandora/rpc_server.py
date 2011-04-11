@@ -86,6 +86,16 @@ class PandoraServerProxy(object):
 
     def stop_song(self):
         self.account.stop()
+
+    def pause_song(self, pause=None):
+        song = self._get_current_song()
+
+        if (song.paused and pause is None) or pause is False:
+            song.play()
+            return True
+        else:
+            song.pause()
+            return False
         
     def get_playlist(self, station_id):
         station = self._get_station(station_id)
@@ -99,7 +109,7 @@ class PandoraServerProxy(object):
         song = station.play(block=False, finished_cb=station.finish_cb__play_next)
         if not song: return False
         return format_song(song)
-    
+
     def get_stations(self):
         if not self.account: return {}
         return dict([(k, s.name) for k,s in self.account.stations.iteritems()])
