@@ -175,6 +175,7 @@ class Connection(object):
             else: 
                 authenticate_tries -= 1
                 logging.error("failed authentication, trying %d more times" % authenticate_tries)
+                time.sleep(1)
 
         if not authenticated:
             logging.error("can't authenticiate with pandora?!")
