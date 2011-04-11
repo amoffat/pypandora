@@ -227,6 +227,8 @@ static PyObject* pandora_playSound(PyObject *self, PyObject *args) {
     pandora_fmod_errcheck(res);
     res = FMOD_Channel_SetVolume(fx_channel, CLAMP(4 * volume, 0.0, 1.0));
     pandora_fmod_errcheck(res);
+    res = FMOD_Channel_SetPriority(fx_channel, 10); // not as high priority as music
+    pandora_fmod_errcheck(res);
 
     Py_RETURN_NONE;
 }
@@ -247,7 +249,9 @@ static PyObject* pandora_playMusic(PyObject *self, PyObject *args) {
     }
     res = FMOD_System_CreateSound(sound_system, song_file, FMOD_SOFTWARE, 0, &music);
     pandora_fmod_errcheck(res);
-    res = FMOD_System_PlaySound(sound_system, FMOD_CHANNEL_REUSE, music, 0, &music_channel);
+    res = FMOD_System_PlaySound(sound_system, FMOD_CHANNEL_FREE, music, 0, &music_channel);
+    pandora_fmod_errcheck(res);
+    res = FMOD_Channel_SetPriority(music_channel, 0); // high priority
     pandora_fmod_errcheck(res);
 
     res = FMOD_Channel_GetFrequency(music_channel, &original_frequency);
