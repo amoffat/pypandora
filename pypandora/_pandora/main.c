@@ -92,7 +92,7 @@ static float _pandora_setVolume(float new_volume) {
     volume = new_volume;
 
     // adjust for the gain
-    new_volume = new_volume * ((GAIN_TARGET - current_gain) / GAIN_TARGET);
+    new_volume = new_volume * ((GAIN_TARGET + current_gain) / GAIN_TARGET);
     new_volume = CLAMP(new_volume, 0.0, 1.0);
 
     FMOD_RESULT res;
