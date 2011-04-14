@@ -1,4 +1,4 @@
-PyPandora is a python interface to Pandora http://www.pandora.com/ based on pianobar http://github.com/PromyLOPh/pianobar
+PyPandora is a python interface to [Pandora](http://www.pandora.com/) based on [pianobar](http://github.com/PromyLOPh/pianobar)
 
 It can either be used directly as a python module with an incredibly simple interface:
 
@@ -9,4 +9,4 @@ It can either be used directly as a python module with an incredibly simple inte
 
 The rpcs server can be started with python -m "pypandora.rpc_server", by default it listens on port 8123
 
-Mark Rogers has written a kickass web frontend here http://github.com/f4nt/djpandora
+Mark Rogers has written a [kickass web frontend](http://github.com/f4nt/djpandora) to control the rpc server from your browser.
