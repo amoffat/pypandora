@@ -29,7 +29,8 @@ def format_song(song):
         "artist": song.artist,
         "album": song.album,
         "length": song.length,
-        "progress": song.progress
+        "progress": song.progress,
+        "art": song.album_art
     }    
 
 class PandoraServerProxy(object):

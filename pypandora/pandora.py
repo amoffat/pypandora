@@ -370,13 +370,14 @@ class Song(object):
     _download_lock = eventlet.semaphore.Semaphore()
     _play_lock = eventlet.semaphore.Semaphore()
 
-    def __init__(self, station, songTitle, artistSummary, audioURL, fileGain, userSeed, musicId, albumTitle, **kwargs):
+    def __init__(self, station, songTitle, artistSummary, audioURL, fileGain, userSeed, musicId, albumTitle, artistArtUrl, **kwargs):
         self.station = station
         self.seed = userSeed
         self.id = musicId
         self.title = songTitle
         self.album = albumTitle
         self.artist = artistSummary
+        self.album_art = artistArtUrl
 
         self.__dict__.update(kwargs)
 
