@@ -1,7 +1,12 @@
-a pandora python interface to control and play your pandora stations
+PyPandora is a python interface to Pandora http://www.pandora.com/ based on pianobar http://github.com/PromyLOPh/pianobar
 
-consists of a high-level python module which controls account/station/song operations and a c extension that handles the encrypting/decrypting of the api calls to Pandora servers, as well as the actual audio playing (using FMOD)
+It can either be used directly as a python module with an incredibly simple interface:
 
-rpc_server is an xmlrpc server that can be started with python -m "pypandora.rpc_server"
+import pypandora
+pypandora.login(username, password)
+print pypandora.stations
+pypandora.stations[0].play(True)
 
-f4nt has a web front end in django here: https://github.com/f4nt/djpandora
+The rpcs server can be started with python -m "pypandora.rpc_server", by default it listens on port 8123
+
+Mark Rogers has written a kickass web frontend here http://github.com/f4nt/djpandora
