@@ -2,10 +2,10 @@ PyPandora is a python interface to Pandora http://www.pandora.com/ based on pian
 
 It can either be used directly as a python module with an incredibly simple interface:
 
-import pypandora
-pypandora.login(username, password)
-print pypandora.stations
-pypandora.stations[0].play(True)
+    import pypandora
+    pypandora.login(username, password)
+    print pypandora.stations
+    pypandora.stations[0].play(True)
 
 The rpcs server can be started with python -m "pypandora.rpc_server", by default it listens on port 8123
 
