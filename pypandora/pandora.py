@@ -13,6 +13,7 @@ import logging
 import math
 from optparse import OptionParser
 from tempfile import gettempdir
+import struct
 
 import _pandora
 
@@ -365,6 +366,57 @@ class Station(object):
         return "%s" % self.name
 
 
+class ID3Tag(object):
+    def __init__(self):
+        self.frames = []
+
+    def add_frame(self, name, data):
+        name = name.upper()
+        # WHY does it need this extra null byte?  the spec says nothing about
+        # it...
+        data = "\x00" + data
+        header = struct.pack(">4siBB", name, self.sync_encode(len(data)), 0, 0)
+        self.frames.append(header + data)
+
+    def binary(self):
+        total_size = sum([len(frame) for frame in self.frames])
+        header = struct.pack(">3s2BBi", "ID3", 4, 0, 0, self.sync_encode(total_size))
+        return header + "".join(self.frames)
+
+    def add_to_file(self, f):
+        h = open(f, "r+b")
+        mp3_data = h.read()
+        h.truncate(0)
+        h.seek(0)
+        h.write(self.binary() + mp3_data)
+        h.close()
+
+    def sync_decode(self, x):
+        x_final = 0x00;
+        a = x & 0xff;
+        b = (x >> 8) & 0xff;
+        c = (x >> 16) & 0xff;
+        d = (x >> 24) & 0xff;
+
+        x_final = x_final | a;
+        x_final = x_final | (b << 7);
+        x_final = x_final | (c << 14);
+        x_final = x_final | (d << 21);
+        return x_final
+
+    def sync_encode(self, x):
+        x_final = 0x00;
+        a = x & 0x7f;
+        b = (x >> 7) & 0x7f;
+        c = (x >> 14) & 0x7f;
+        d = (x >> 21) & 0x7f;
+
+        x_final = x_final | a;
+        x_final = x_final | (b << 8);
+        x_final = x_final | (c << 16);
+        x_final = x_final | (d << 24);
+        return x_final
+
 
 class Song(object):
     _download_lock = eventlet.semaphore.Semaphore()
@@ -443,9 +495,17 @@ class Song(object):
         c = httplib.HTTPConnection(host)
         c.request("GET", path, headers={"Range": "bytes=%d-" % 0})
         res = c.getresponse()
+        mp3_data = res.read()
+
+        tag = ID3Tag()
+        tag.add_frame("ufid", self.id)
+        tag.add_frame("tit2", self.title)
+        tag.add_frame("talb", self.album)
+        tag.add_frame("tpe1", self.artist)
+        mp3_data = tag.binary() + mp3_data
 
         h = open(self.filename, "w")
-        h.write(res.read())
+        h.write(mp3_data)
         c.close()
         h.close()
 
