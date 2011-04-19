@@ -446,7 +446,7 @@ class Song(object):
             part = re.sub("_+", "_", part)
             return part
 
-        self.filename = join(self.station.account.cache_dir, "%s-%s.mp3" % (format_title(songTitle), format_title(artistSummary)))
+        self.filename = join(self.station.account.cache_dir, "%s-%s.mp3" % (format_title(artistSummary), format_title(songTitle)))
 
         self.started = None
         self.stopped = None
