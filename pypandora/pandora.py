@@ -372,8 +372,8 @@ class ID3Tag(object):
 
     def add_frame(self, name, data):
         name = name.upper()
-        # WHY does it need this extra null byte?  the spec says nothing about
-        # it...
+        # null byte means latin-1 encoding...
+        # see section 4 http://www.id3.org/id3v2.4.0-structure
         data = "\x00" + data
         header = struct.pack(">4siBB", name, self.sync_encode(len(data)), 0, 0)
         self.frames.append(header + data)
