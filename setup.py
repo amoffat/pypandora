@@ -19,7 +19,7 @@ setup(
 
     packages = find_packages('.'),
     package_dir = {'':'.'},
-    data_files=[('.', ['README','MANIFEST.in']),],
+    data_files=[('.', ['README.md','MANIFEST.in']),],
     package_data = {
         'pypandora': ['templates/*.xml', "cues/*"],
     },
