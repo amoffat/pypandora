@@ -37,7 +37,7 @@ class Connection(object):
     """
     Handles all the direct communication to Pandora's servers
     """
-    _pandora_protocol_version = 29
+    _pandora_protocol_version = 30
     _pandora_host = "www.pandora.com"
     _pandora_port = 80
     _pandora_rpc_path = "/radio/xmlrpc/v%d" % _pandora_protocol_version
