@@ -132,6 +132,7 @@ class Connection(object):
         body = self.get_template("sync")
         timestamp = None
 
+
         while timestamp is None:
             xml = self.send(get.copy(), body)
             timestamp = xml.find("params/param/value").text
@@ -374,9 +375,28 @@ class ID3Tag(object):
         name = name.upper()
         # null byte means latin-1 encoding...
         # see section 4 http://www.id3.org/id3v2.4.0-structure
-        data = "\x00" + data
         header = struct.pack(">4siBB", name, self.sync_encode(len(data)), 0, 0)
         self.frames.append(header + data)
+
+    def add_artist(self, artist):
+        self.add_frame("tpe1", "\x00" + artist)
+
+    def add_title(self, title):
+        self.add_frame("tit2", "\x00" + title)
+
+    def add_album(self, album):
+        self.add_frame("talb", "\x00" + album)
+
+    def add_id(self, id):
+        self.add_frame("ufid", "\x00" + id)
+
+    def add_image(self, image_url):
+        mime_type = "\x00" + "-->" + "\x00"
+        description = "cover image" + "\x00"
+        # 3 for cover image
+        data = struct.pack(">B5sB12s", 0, mime_type, 3, description)
+        data += image_url
+        self.add_frame("apic", data)
 
     def binary(self):
         total_size = sum([len(frame) for frame in self.frames])
@@ -498,10 +518,11 @@ class Song(object):
         mp3_data = res.read()
 
         tag = ID3Tag()
-        tag.add_frame("ufid", self.id)
-        tag.add_frame("tit2", self.title)
-        tag.add_frame("talb", self.album)
-        tag.add_frame("tpe1", self.artist)
+        tag.add_id(self.id)
+        tag.add_title(self.title)
+        tag.add_album(self.album)
+        tag.add_artist(self.artist)
+        #tag.add_image(self.album_art)
         mp3_data = tag.binary() + mp3_data
 
         h = open(self.filename, "w")
