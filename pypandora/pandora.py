@@ -2,6 +2,7 @@ import eventlet
 import time
 from xml.etree import cElementTree
 import xml.dom.minidom
+from xml.sax.saxutils import escape as xml_escape
 from string import Template
 import httplib
 import urllib
@@ -160,12 +161,13 @@ class Connection(object):
             logging.info("trying to authenticate with pandora...")
             body = self.get_template("authenticate", {
                 "timestamp": int(time.time() - self.timeoffset),
-                "email": email,
-                "password": password
+                "email": xml_escape(email),
+                "password": xml_escape(password)
             })
             # we use a copy because do some del operations on the dictionary
             # from within send
             xml = self.send(get.copy(), body)
+            
             for el in xml.findall("params/param/value/struct/member"):
                 children = el.getchildren()
                 if children[0].text == "authToken":
