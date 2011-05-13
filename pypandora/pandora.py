@@ -15,9 +15,13 @@ import math
 from optparse import OptionParser
 from tempfile import gettempdir
 import struct
+from pprint import pprint
 
 import _pandora
 
+
+try: from urlparse import parse_qsl
+except ImportError: from cgi import parse_qsl
 
 
 
@@ -461,6 +465,14 @@ class Song(object):
         self.album_art = artistArtUrl
 
         self.__dict__.update(kwargs)
+
+
+        self.purchase_itunes =  kwargs.get("itunesUrl", "")
+        if self.purchase_itunes:
+            self.purchase_itunes = urllib.unquote(parse_qsl(self.purchase_itunes)[0][1])
+
+        self.purchase_amazon = kwargs.get("amazonUrl", "")
+
 
         try: self.gain = float(fileGain)
         except: self.gain = 0.0
