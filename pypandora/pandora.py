@@ -229,7 +229,6 @@ class Account(object):
     def _get_stations(self):
         """ a private getter that puts the stations, sorted alphabetically,
         into the self.stations attribute dictionary """
-        if self._stations: return self._stations
 
         get = {"method": "getStations", "lid": self.connection.lid}
         body = self.connection.get_template("get_stations", {
@@ -238,8 +237,8 @@ class Account(object):
         })
         xml = self.connection.send(get, body)
 
+        fresh_stations = {}
         station_params = {}
-        self._stations = {}
         Station._current_id = 0
 
         for el in xml.findall("params/param/value/array/data/value"):
@@ -248,9 +247,17 @@ class Account(object):
                 station_params[c[0].text] = c[1].text
 
             station = Station(self, **station_params)
-            self._stations[station.id] = station
+            fresh_stations[station.id] = station
 
-        #self._stations.sort(key=lambda s: s.name)
+
+        # remove any stations that pandora says we don't have anymore
+        for id, station in self._stations.items():
+            if not fresh_stations.get(id): del self._stations[id]
+
+        # add any new stations if they don't already exist
+        for id, station in fresh_stations.iteritems():
+            self._stations.setdefault(id, station)
+
         return self._stations
     stations = property(_get_stations)
 
