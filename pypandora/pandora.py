@@ -586,6 +586,7 @@ class Song(object):
             finished_naturally = False
             preloading_next = False
             while True:            
+                _pandora.update()
                 stats = _pandora.stats()
                 if stats:
                     total, pos = stats

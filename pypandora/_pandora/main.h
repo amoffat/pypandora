@@ -8,20 +8,22 @@
 #ifndef MAIN_H_
 #define MAIN_H_
 
-#define DEF_PANDORA_FN(name) static PyObject* pandora_##name(PyObject *, PyObject *)
+#define DEF_PANDORA_FN_H(name) static PyObject* pandora_##name(PyObject *, PyObject *)
+#define DEF_PANDORA_FN(name) static PyObject* pandora_##name(PyObject *self, PyObject *args)
 
-DEF_PANDORA_FN(decrypt);
-DEF_PANDORA_FN(encrypt);
-DEF_PANDORA_FN(playMusic);
-DEF_PANDORA_FN(playSound);
-DEF_PANDORA_FN(getMusicStats);
-DEF_PANDORA_FN(musicIsPlaying);
-DEF_PANDORA_FN(pauseMusic);
-DEF_PANDORA_FN(setMusicSpeed);
-DEF_PANDORA_FN(getVolume);
-DEF_PANDORA_FN(setVolume);
-DEF_PANDORA_FN(stopMusic);
-DEF_PANDORA_FN(unpauseMusic);
+DEF_PANDORA_FN_H(decrypt);
+DEF_PANDORA_FN_H(encrypt);
+DEF_PANDORA_FN_H(playMusic);
+DEF_PANDORA_FN_H(playSound);
+DEF_PANDORA_FN_H(getMusicStats);
+DEF_PANDORA_FN_H(musicIsPlaying);
+DEF_PANDORA_FN_H(pauseMusic);
+DEF_PANDORA_FN_H(setMusicSpeed);
+DEF_PANDORA_FN_H(getVolume);
+DEF_PANDORA_FN_H(setVolume);
+DEF_PANDORA_FN_H(stopMusic);
+DEF_PANDORA_FN_H(unpauseMusic);
+DEF_PANDORA_FN_H(update);
 
 static float _pandora_setVolume(float new_volume);
 

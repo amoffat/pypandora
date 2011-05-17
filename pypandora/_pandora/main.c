@@ -51,6 +51,7 @@ static PyMethodDef pandora_methods[] = {
     {"set_volume", pandora_setVolume, METH_VARARGS, "Set the volume"},
     {"get_volume", pandora_getVolume, METH_VARARGS, "Get the volume"},
     {"stats",  pandora_getMusicStats, METH_VARARGS, "Get music stats"},
+    {"update",  pandora_update, METH_VARARGS, "Updates the FMOD internals"},
     {NULL, NULL, 0, NULL}
 };
 
@@ -145,6 +146,12 @@ static PyObject* pandora_setMusicSpeed(PyObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+DEF_PANDORA_FN(update) {
+    FMOD_RESULT res;
+    res = FMOD_System_Update(sound_system);
+    pandora_fmod_errcheck(res);
+    Py_RETURN_NONE;
+}
 
 static PyObject* pandora_stopMusic(PyObject *self, PyObject *args) {
     FMOD_RESULT res;
