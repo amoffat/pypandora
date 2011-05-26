@@ -168,10 +168,22 @@ DEF_PANDORA_FN(update) {
 static PyObject* pandora_stopMusic(PyObject *self, PyObject *args) {
     FMOD_RESULT res;
 
+
     if (music_channel) {
-        res = FMOD_Channel_Stop(music_channel);
-        music_channel = NULL;
-        pandora_fmod_errcheck("stopping music", res);
+        /*
+         * why is there an invalid object handle SOMETIMES????
+         * this only started happening when i did the fmod_system_update
+         * this is why i can't check the result for errors...
+         */
+        FMOD_BOOL isplaying;
+        res = FMOD_Channel_IsPlaying(music_channel, &isplaying);
+        //pandora_fmod_errcheck("checking if music is playing before stopping", res);
+
+        if (isplaying) {
+            res = FMOD_Channel_Stop(music_channel);
+            music_channel = NULL;
+            //pandora_fmod_errcheck("stopping music", res);
+        }
     }
     if (music) {
         res = FMOD_Sound_Release(music);
