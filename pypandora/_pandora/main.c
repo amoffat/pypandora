@@ -77,8 +77,6 @@ static PyObject* pandora_decrypt(PyObject *self, PyObject *args) {
 
 
 static PyObject* pandora_getMusicStats(PyObject *self, PyObject *args) {
-    if (!music_channel) Py_RETURN_NONE;
-
     unsigned int pos;
     unsigned int length;
     FMOD_RESULT res;
@@ -86,15 +84,18 @@ static PyObject* pandora_getMusicStats(PyObject *self, PyObject *args) {
     res = FMOD_Sound_GetLength(music, &length, FMOD_TIMEUNIT_MS);
     pandora_fmod_errcheck("getting music length", res);
 
-    res = FMOD_Channel_GetPosition(music_channel, &pos, FMOD_TIMEUNIT_MS);
-    /*
-     * for some reason, sometimes we'll be unable to get the position
-     * of the music channel, even though it's not null.  this typically
-     * happens 1 second before the end of the song, so we go ahead
-     * and just pretend like the song is done
-     */
-    if (res != FMOD_OK) pos = length;
-    //pandora_fmod_errcheck("getting music position", res);
+    if (music_channel) {
+        res = FMOD_Channel_GetPosition(music_channel, &pos, FMOD_TIMEUNIT_MS);
+        /*
+         * for some reason, sometimes we'll be unable to get the position
+         * of the music channel, even though it's not null.  this typically
+         * happens 1 second before the end of the song, so we go ahead
+         * and just pretend like the song is done
+         */
+        if (res != FMOD_OK) pos = length;
+        //pandora_fmod_errcheck("getting music position", res);
+    }
+    else pos = length;
 
     return Py_BuildValue("(ii)", (int)((float)length / 1000.0f), (int)((float)pos / 1000.0f));
 }
@@ -182,7 +183,7 @@ static PyObject* pandora_stopMusic(PyObject *self, PyObject *args) {
         if (isplaying) {
             res = FMOD_Channel_Stop(music_channel);
             music_channel = NULL;
-            //pandora_fmod_errcheck("stopping music", res);
+            pandora_fmod_errcheck("stopping music", res);
         }
     }
     if (music) {
@@ -272,8 +273,10 @@ static PyObject* pandora_playMusic(PyObject *self, PyObject *args) {
 
     FMOD_RESULT res;
     if (music != NULL) {
-        res = FMOD_Channel_Stop(music_channel);
-        pandora_fmod_errcheck("stopping existing music", res);
+        if (music_channel) {
+            res = FMOD_Channel_Stop(music_channel);
+            pandora_fmod_errcheck("stopping existing music", res);
+        }
 
         res = FMOD_Sound_Release(music); // avoid memory leak...
         pandora_fmod_errcheck("releasing existing music", res);
