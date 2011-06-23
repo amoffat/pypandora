@@ -81,6 +81,8 @@ static PyObject* pandora_getMusicStats(PyObject *self, PyObject *args) {
     unsigned int length;
     FMOD_RESULT res;
 
+    if (!music) return Py_BuildValue("(ii)", 0, 0);
+
     res = FMOD_Sound_GetLength(music, &length, FMOD_TIMEUNIT_MS);
     pandora_fmod_errcheck("getting music length", res);
 
