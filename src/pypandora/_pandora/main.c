@@ -1,4 +1,4 @@
-#include <python2.6/Python.h>
+#include <Python.h>
 #include "main.h"
 #include "crypt.h"
 #include <fmodex/fmod.h>

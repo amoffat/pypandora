@@ -5,3 +5,5 @@ python
 build
 _pandora.so
 dist
+/.project
+/.pydevproject
