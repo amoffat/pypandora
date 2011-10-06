@@ -11,12 +11,12 @@ SRC_DIR = join(THIS_DIR, "src")
 PKG_DIR = join(SRC_DIR, "pypandora")
 
 
-python_include = "python%d.%d" % (sys.version_info.major, sys.version_info.minor)
+python_include = "python%d.%d" % (sys.version_info[0], sys.version_info[1])
 
 
 # find fmod...
-fmod_lib = glob.glob("/usr/local/lib/libfmod*")
-if not fmod_lib: fmod_lib = glob.glob("/usr/lib/libfmod*")
+fmod_lib = glob.glob("/usr/local/lib/libfmodex-*")
+if not fmod_lib: fmod_lib = glob.glob("/usr/lib/libfmodex-*")
 if not fmod_lib: raise Exception, "please install fmod http://www.fmod.org/index.php/download"
 
 fmod_lib = fmod_lib[0]
