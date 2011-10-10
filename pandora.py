@@ -218,7 +218,8 @@ class Account(object):
     def logout(self):
         pass
 
-    def _get_stations(self):
+    @property
+    def stations(self):
         """ a private getter that puts the stations, sorted alphabetically,
         into the self.stations attribute dictionary """
 
@@ -251,7 +252,6 @@ class Account(object):
             self._stations.setdefault(id, station)
 
         return self._stations
-    stations = property(_get_stations)
 
 
 
@@ -299,7 +299,8 @@ class Station(object):
     def next(self, **kwargs):
         return self.play(next_song=True, **kwargs)
 
-    def _get_playlist(self):
+    @property
+    def playlist(self):
         """ a playlist getter.  each call to Pandora's station api returns maybe
         3 songs in the playlist.  so each time we access the playlist, we need
         to see if it's empty.  if it's not, return it, if it is, get more
@@ -345,7 +346,6 @@ class Station(object):
         if not got_playlist: raise Exception, "can't get playlist!"
 
         return self._playlist
-    playlist = property(_get_playlist)
 
     @staticmethod
     def finish_cb__play_next(account, station, song):
@@ -511,6 +511,7 @@ class Song(object):
         tag.add_title(self.title)
         tag.add_album(self.album)
         tag.add_artist(self.artist)
+        # can't get this working...
         #tag.add_image(self.album_art)
         mp3_data = tag.binary() + mp3_data
 
@@ -1112,10 +1113,9 @@ if __name__ == "__main__":
         debug_logger.addHandler(lh)
 
     account = Account(options.user, options.password, debug=options.debug)
-    print account.stations
 
     # play a random station
-    from random import randint
-    num_stations = len(account.stations)
-    random_station = randint(0, num_stations - 1)    
+    from random import choice
+    random_station = choice(account.stations.values())
+    print random_station.playlist[0]._download() 
     #account.stations[random_station].play(True)
