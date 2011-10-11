@@ -4,20 +4,11 @@ import time
 import errno
 import sys
 import time
+from collections import deque
 
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(('', 8081))
-server.listen(100)
-server.setblocking(0)
 
-music_source = open("/home/amoffat/Music/windowlicker.mp3", "r")
-music_buffer = music_source.read(4096)
-last_music_read = time.time()
 
-to_read = set([server, music_source])
-to_write = set([])
-to_err = set([])
 
 
 
@@ -29,7 +20,7 @@ class Connection(object):
         self._path_gen = None
         
         self._stream_gen = None
-        self._last_streamed = None
+        self._last_streamed = ""
         
     def fileno(self):
         return self.sock.fileno()
@@ -47,7 +38,6 @@ class Connection(object):
             try: data = self.sock.recv(1)
             except socket.error, e:
                 if e.errno == errno.EWOULDBLOCK:
-                    to_read.add(conn)
                     yield False
                     continue
                 else:
@@ -66,18 +56,15 @@ class Connection(object):
             self._stream_gen = self.send_stream(music)
             done = self._stream_gen.next()
         else: done = self._stream_gen.send(music)
-            
-        if done: to_write.remove(self)
+        return done
             
 
     def send_stream(self, music):
         self.sock.send("HTTP/1.1 200 OK\r\n\r\n")
         
-        while music:
-            if music != self._last_streamed:
-                try:
-                    self.sock.sendall(music)
-                    self._last_streamed = music
+        while True:
+            if self._last_streamed != music:
+                try: sent = self.sock.send(music)
                 except socket.error, e:
                     if e.errno == errno.EWOULDBLOCK:
                         pass
@@ -85,33 +72,66 @@ class Connection(object):
                         print sys.exc_info()
                         break
                 
+            self._last_streamed = music
             music = (yield False)   
         yield True
         
-    
+
+        
+class PlayerServer(object):
+    def __init__(self):
+        self.to_read = set([music_source])
+        self.to_write = set()
+        self.to_err = set()
+        self.callbacks = []
+        self.music_buffer = ""
+
+    def serve(self):
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.bind(('', 8081))
+        server.listen(100)
+        server.setblocking(0)
+        
+        self.to_read.add(server)
+        last_music_read = time.time()
+        
+        while True:
+            read, write, err = select.select(
+                self.to_read,
+                self.to_write,
+                self.to_err,
+                0
+            )
+            
+            for sock in read:
+                if sock is server:
+                    conn, addr = server.accept()
+                    conn.setblocking(0)
+                    
+                    conn = Connection(conn)
+                    self.to_read.add(conn)
+                    
+                elif sock is music_source:
+                    now = time.time()
+                    if last_music_read + .1 < now:
+                        self.music_buffer = sock.read(4096)
+                        last_music_read = now
+                    else:
+                        time.sleep(.1)
+                else:
+                    if sock.path:                    
+                        #sock.shutdown(socket.SHUT_RD)
+                        self.to_read.remove(sock)
+                        self.to_write.add(sock)
+                    
+            for sock in write:     
+                if sock.path == "/":
+                    done = sock.stream_music(self.music_buffer)
+                    if done: self.to_write.remove(sock)
+                    
+            for cb in self.callbacks: cb()
 
 
-while True:
-    read, write, ex = select.select(to_read, to_write, to_err)
-    
-    for sock in read:
-        if sock is server:
-            conn, addr = server.accept()
-            conn.setblocking(0)
-            
-            conn = Connection(conn)
-            to_read.add(conn)
-        elif sock is music_source:
-            now = time.time()
-            if last_music_read + .1 < now:
-                music_buffer = music_source.read(4096)
-                last_music_read = now
-        else:
-            if sock.path:                    
-                #sock.shutdown(socket.SHUT_RD)
-                to_read.remove(sock)
-                to_write.add(sock)
-            
-    for sock in write:     
-        if sock.path == "/":
-            sock.stream_music(music_buffer)
+
+server = PlayerServer()
+server.serve()
