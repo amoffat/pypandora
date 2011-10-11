@@ -1076,6 +1076,23 @@ in_key_s = [[
 
 
 
+player = """<!DOCTYPE html>
+<html>
+    <body>
+        <audio preload="none" autoplay="autoplay" controls="controls">
+            <source src="http://localhost:8081/m" type="audio/mp3"/>
+            Your browser does not support the audio element.
+        </audio>
+    </body>
+</html>
+"""
+
+
+
+
+
+
+
 
 
 
@@ -1122,13 +1139,18 @@ class Connection(object):
         yield path      
 
 
+    def serve_webpage(self):
+        page = player
+        self.sock.send("HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n" % len(page))
+        self.sock.send(page)
+    
+
     def stream_music(self, music):
         if not self._stream_gen:
             self._stream_gen = self.send_stream(music)
             done = self._stream_gen.next()
         else: done = self._stream_gen.send(music)
-        return done
-            
+        return done            
 
     def send_stream(self, music):
         self.sock.send("HTTP/1.1 200 OK\r\n\r\n")
@@ -1151,7 +1173,7 @@ class Connection(object):
         
 class PlayerServer(object):
     def __init__(self):
-        self.to_read = set([music_source])
+        self.to_read = set()
         self.to_write = set()
         self.to_err = set()
         self.callbacks = []
@@ -1159,7 +1181,7 @@ class PlayerServer(object):
 
     def serve(self):
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.bind(('', 8081))
+        server.bind(('', 8080))
         server.listen(100)
         server.setblocking(0)
         
@@ -1182,7 +1204,7 @@ class PlayerServer(object):
                     conn = Connection(conn)
                     self.to_read.add(conn)
                     
-                elif sock is music_source:
+                elif sock is None:
                     now = time.time()
                     if last_music_read + .1 < now:
                         self.music_buffer = sock.read(4096)
@@ -1195,8 +1217,11 @@ class PlayerServer(object):
                         self.to_read.remove(sock)
                         self.to_write.add(sock)
                     
-            for sock in write:     
+            for sock in write:
                 if sock.path == "/":
+                    sock.serve_webpage()
+                    self.to_write.remove(sock)
+                elif sock.path == "/m":
                     done = sock.stream_music(self.music_buffer)
                     if done: self.to_write.remove(sock)
                     
@@ -1229,6 +1254,9 @@ logging.basicConfig(
 )
 
 if __name__ == "__main__":
+    server = PlayerServer()
+    server.serve()
+    exit()
     parser = OptionParser(usage=("%prog [options]"))
     parser.add_option('-u', "--username", dest="user", help="your Pandora username (your email)")
     parser.add_option('-p', '--password', dest='password', help='your Pandora password')
@@ -1236,7 +1264,7 @@ if __name__ == "__main__":
     (options, args) = parser.parse_args()
 
     if not options.password or not options.user:
-        parser.error("Please provide your username and password")
+        parser.error("Please provide your username and password with -u and -p")
 
     if options.debug:
         debug_logger = logging.getLogger("debug_logger")
