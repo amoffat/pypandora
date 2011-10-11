@@ -1120,6 +1120,10 @@ class Connection(object):
         self._path = self._path_gen.next()
         return self._path
     
+    def close(self):
+        self.sock.shutdown(socket.SHUT_RDWR)
+        self.sock.close()
+    
     def read_request(self):            
         agg_data = ""
         while True:
@@ -1141,8 +1145,11 @@ class Connection(object):
 
     def serve_webpage(self):
         page = player
-        self.sock.send("HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n" % len(page))
-        self.sock.send(page)
+        try:
+            self.sock.send("HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n" % len(page))
+            self.sock.send(page)
+        except:
+            print sys.exc_info()
     
 
     def stream_music(self, music):
@@ -1181,6 +1188,7 @@ class PlayerServer(object):
 
     def serve(self):
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind(('', 8080))
         server.listen(100)
         server.setblocking(0)
@@ -1193,7 +1201,6 @@ class PlayerServer(object):
                 self.to_read,
                 self.to_write,
                 self.to_err,
-                0
             )
             
             for sock in read:
@@ -1203,6 +1210,7 @@ class PlayerServer(object):
                     
                     conn = Connection(conn)
                     self.to_read.add(conn)
+                    self.to_err.add(conn)
                     
                 elif sock is None:
                     now = time.time()
@@ -1220,10 +1228,18 @@ class PlayerServer(object):
             for sock in write:
                 if sock.path == "/":
                     sock.serve_webpage()
+                    sock.close()
                     self.to_write.remove(sock)
+                    self.to_err.remove(sock)
+                    
                 elif sock.path == "/m":
                     done = sock.stream_music(self.music_buffer)
                     if done: self.to_write.remove(sock)
+                    
+                else:
+                    sock.close()
+                    self.to_write.remove(sock)
+                    self.to_err.remove(sock)
                     
             for cb in self.callbacks: cb()
             
