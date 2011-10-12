@@ -433,6 +433,9 @@ class ID3Tag(object):
 
 
 class Song(object):
+    bitrate = 128
+    read_chunk_size = 4096
+    
 
     def __init__(self, station, songTitle, artistSummary, audioURL, fileGain, userSeed, musicId, albumTitle, artistArtUrl, **kwargs):
         self.station = station
@@ -488,27 +491,65 @@ class Song(object):
 
     def load(self, block=False):
         if block: return self._download()
+        
+    def fileno(self):
+        return self._sock
 
     def _download(self):
         """ downloads the song file from Pandora's servers, returning the
         filename when complete.  if the file already exists in the cache
         directory, just return that """
 
-        # dont re-download if it already exists in cache
-        if exists(self.filename):
-            logging.info("found existing file for %s" % self.filename)
-            return self.filename
         logging.info("downloading %s" % self.filename)
+        
+        
+        
+        
+        bytes_per_second = self.bitrate * 125.0
+        sleep_amt = Song.read_chunk_size / bytes_per_second
+
 
         split = urlsplit(self.url)
         host = split.netloc
         path = split.path + "?" + split.query
+        
 
-        c = httplib.HTTPConnection(host)
-        c.request("GET", path, headers={"Range": "bytes=%d-" % 0})
-        res = c.getresponse()
-        mp3_data = res.read()
+        def connect(start=0):
+            c = httplib.HTTPConnection(host)
+            c.request("GET", path, headers={"Range": "bytes=%d-" % start})
+            res = c.getresponse()
+            return c.sock, res
+        
+        self._sock, res = connect()
+        self.song_size = int(res.getheader("Content-Length"))
+        self.duration = self.song_size / bytes_per_second
+        
+        mp3_data = []
+        byte_counter = 0
+        while True:
+            try: chunk = self._sock.read(Song.read_chunk_size)
+            except socket.error, err:
+                if err.errno is errno.EWOULDBLOCK:
+                    yield False
+                    
+            else:
+                if chunk:
+                    byte_counter += len(chunk)
+                    mp3_data.append(chunk)
+                    
+                # either the song is done, or we got disconnected.  check
+                # for both
+                else:
+                    if byte_counter == self.song_size: break
+                    else: self._sock, res = connect(byte_counter)
+            
+            time.sleep(sleep_amt)
+            
+        mp3_data = "".join(mp3_data)
+        
+        
 
+        # tag it
         tag = ID3Tag()
         tag.add_id(self.id)
         tag.add_title(self.title)
@@ -516,16 +557,14 @@ class Song(object):
         tag.add_artist(self.artist)
         # can't get this working...
         #tag.add_image(self.album_art)
-        mp3_data = tag.binary() + mp3_data
 
+        # write it
         h = open(self.filename, "w")
-        h.write(mp3_data)
+        h.write(tag.binary() + mp3_data)
         c.close()
         h.close()
-
-        logging.info("finished downloading %s" % self.filename)
-
-        return self.filename
+        yield True
+        
 
     def new_station(self, station_name):
         """ create a new station from this song """
@@ -1100,7 +1139,7 @@ player = """<!DOCTYPE html>
 
 
 
-class Connection(object):
+class WebConnection(object):
     def __init__(self, sock):
         self.sock = sock
         
@@ -1177,6 +1216,8 @@ class Connection(object):
         yield True
         
 
+
+
         
 class PlayerServer(object):
     def __init__(self):
@@ -1208,7 +1249,7 @@ class PlayerServer(object):
                     conn, addr = server.accept()
                     conn.setblocking(0)
                     
-                    conn = Connection(conn)
+                    conn = WebConnection(conn)
                     self.to_read.add(conn)
                     self.to_err.add(conn)
                     
@@ -1270,9 +1311,9 @@ logging.basicConfig(
 )
 
 if __name__ == "__main__":
-    server = PlayerServer()
-    server.serve()
-    exit()
+    #server = PlayerServer()
+    #server.serve()
+    #exit()
     parser = OptionParser(usage=("%prog [options]"))
     parser.add_option('-u', "--username", dest="user", help="your Pandora username (your email)")
     parser.add_option('-p', '--password', dest='password', help='your Pandora password')
