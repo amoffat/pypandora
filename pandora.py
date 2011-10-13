@@ -478,6 +478,9 @@ class Song(object):
         self.done = False # if the song has finished playing
         self.progress = 0 # number of seconds that have passed in playing
 
+        self._stream_gen = None
+        self._sock = socket.socket()
+        
 
     @staticmethod
     def _decrypt_url(url):
@@ -493,16 +496,20 @@ class Song(object):
         if block: return self._download()
         
     def fileno(self):
-        return self._sock
+        return self._sock.fileno()
+    
+    def read(self):
+        if not self._stream_gen: self._stream_gen = self._stream()
+        try: data = self._stream_gen.next()
+        except StopIteration: return False
+        return data
 
-    def _download(self):
+    def _stream(self):
         """ downloads the song file from Pandora's servers, returning the
         filename when complete.  if the file already exists in the cache
         directory, just return that """
 
         logging.info("downloading %s" % self.filename)
-        
-        
         
         
         bytes_per_second = self.bitrate * 125.0
@@ -513,37 +520,47 @@ class Song(object):
         host = split.netloc
         path = split.path + "?" + split.query
         
+        req_template = """GET %s HTTP/1.0\r\nHost: %s\r\nRange: bytes=%d-\r\nUser-Agent: pypandora\r\nAccept: */*\r\n\r\n"""
 
         def connect(start=0):
-            c = httplib.HTTPConnection(host)
-            c.request("GET", path, headers={"Range": "bytes=%d-" % start})
-            res = c.getresponse()
-            return c.sock, res
+            sock = socket.socket()
+            sock.connect((host, 80))
+            sock.send(req_template % (path, host, start))            
+            return sock
         
-        self._sock, res = connect()
-        self.song_size = int(res.getheader("Content-Length"))
+        self._sock = connect()
+        
+        data = self._sock.recv(1024)
+        m = re.search("Content-Length: (\d+?)\r\n", data)
+        self.song_size = int(m.group(1))        
         self.duration = self.song_size / bytes_per_second
-        
+
         mp3_data = []
         byte_counter = 0
+        last_read = 0
         while True:
-            try: chunk = self._sock.read(Song.read_chunk_size)
+            now = time.time()
+            if now - last_read < sleep_amt:
+                yield None
+                continue
+            
+            last_read = now
+            try: chunk = self._sock.recv(Song.read_chunk_size)
             except socket.error, err:
                 if err.errno is errno.EWOULDBLOCK:
-                    yield False
-                    
+                    yield None
+                    continue
             else:
                 if chunk:
                     byte_counter += len(chunk)
                     mp3_data.append(chunk)
+                    yield chunk
                     
                 # either the song is done, or we got disconnected.  check
                 # for both
                 else:
                     if byte_counter == self.song_size: break
-                    else: self._sock, res = connect(byte_counter)
-            
-            time.sleep(sleep_amt)
+                    else: self._sock = connect(byte_counter)
             
         mp3_data = "".join(mp3_data)
         
@@ -561,9 +578,7 @@ class Song(object):
         # write it
         h = open(self.filename, "w")
         h.write(tag.binary() + mp3_data)
-        c.close()
         h.close()
-        yield True
         
 
     def new_station(self, station_name):
@@ -1119,7 +1134,7 @@ player = """<!DOCTYPE html>
 <html>
     <body>
         <audio preload="none" autoplay="autoplay" controls="controls">
-            <source src="http://localhost:8081/m" type="audio/mp3"/>
+            <source src="http://localhost:8080/m" type="audio/mp3"/>
             Your browser does not support the audio element.
         </audio>
     </body>
@@ -1253,13 +1268,9 @@ class PlayerServer(object):
                     self.to_read.add(conn)
                     self.to_err.add(conn)
                     
-                elif sock is None:
-                    now = time.time()
-                    if last_music_read + .1 < now:
-                        self.music_buffer = sock.read(4096)
-                        last_music_read = now
-                    else:
-                        time.sleep(.1)
+                elif isinstance(sock, Song):
+                    chunk = sock.read()
+                    if chunk: self.music_buffer = chunk
                 else:
                     if sock.path:                    
                         #sock.shutdown(socket.SHUT_RD)
@@ -1283,7 +1294,7 @@ class PlayerServer(object):
                     self.to_err.remove(sock)
                     
             for cb in self.callbacks: cb()
-            
+            time.sleep(.01)
             
             
             
@@ -1311,9 +1322,6 @@ logging.basicConfig(
 )
 
 if __name__ == "__main__":
-    #server = PlayerServer()
-    #server.serve()
-    #exit()
     parser = OptionParser(usage=("%prog [options]"))
     parser.add_option('-u', "--username", dest="user", help="your Pandora username (your email)")
     parser.add_option('-p', '--password', dest='password', help='your Pandora password')
@@ -1335,5 +1343,9 @@ if __name__ == "__main__":
     # play a random station
     from random import choice
     random_station = choice(account.stations.values())
-    print random_station.playlist[0]._download() 
-    #account.stations[random_station].play(True)
+    song = random_station.playlist[0]
+
+
+    server = PlayerServer()
+    server.to_read.add(song)
+    server.serve()
