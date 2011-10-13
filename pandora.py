@@ -523,17 +523,25 @@ class Song(object):
         req_template = """GET %s HTTP/1.0\r\nHost: %s\r\nRange: bytes=%d-\r\nUser-Agent: pypandora\r\nAccept: */*\r\n\r\n"""
 
         def connect(start=0):
-            sock = socket.socket()
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect((host, 80))
+            sock.setblocking(0)
             sock.send(req_template % (path, host, start))            
             return sock
         
         self._sock = connect()
         
-        data = self._sock.recv(1024)
+        
+        try: data = self._sock.recv(1024)
+        except socket.error, err:
+            if err.errno is errno.EWOULDBLOCK:
+                pass
+            
         m = re.search("Content-Length: (\d+?)\r\n", data)
         self.song_size = int(m.group(1))        
         self.duration = self.song_size / bytes_per_second
+        
+        yield data[data.find("\r\n\r\n")+4:]
 
         mp3_data = []
         byte_counter = 0
@@ -548,6 +556,7 @@ class Song(object):
             try: chunk = self._sock.recv(Song.read_chunk_size)
             except socket.error, err:
                 if err.errno is errno.EWOULDBLOCK:
+                    print "blocking"
                     yield None
                     continue
             else:
