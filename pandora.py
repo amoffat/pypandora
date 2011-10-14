@@ -19,6 +19,7 @@ from pprint import pprint
 import select
 import errno
 import sys
+from msocket import MagicSocket
 
 
 try: from urlparse import parse_qsl
@@ -523,29 +524,26 @@ class Song(object):
         req_template = """GET %s HTTP/1.0\r\nHost: %s\r\nRange: bytes=%d-\r\nUser-Agent: pypandora\r\nAccept: */*\r\n\r\n"""
 
         def connect(start=0):
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock = MagicSocket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect((host, 80))
-            sock.setblocking(0)
-            sock.send(req_template % (path, host, start))            
+            sock.send(req_template % (path, host, start))
             return sock
         
         self._sock = connect()
         
         
-        try: data = self._sock.recv(1024)
-        except socket.error, err:
-            if err.errno is errno.EWOULDBLOCK:
-                pass
-            
-        m = re.search("Content-Length: (\d+?)\r\n", data)
-        self.song_size = int(m.group(1))        
-        self.duration = self.song_size / bytes_per_second
+        headers = self._sock.read_until("\r\n\r\n", break_after_read=False, include_last=True)
+        headers = headers.strip().split("\r\n")
+        headers = dict([h.split(": ") for h in headers[1:]])
+        self._sock.setblocking(0)
         
-        yield data[data.find("\r\n\r\n")+4:]
+        self.song_size = int(headers["Content-Length"])
+        self.duration = self.song_size / bytes_per_second
 
         mp3_data = []
         byte_counter = 0
         last_read = 0
+        
         while True:
             now = time.time()
             if now - last_read < sleep_amt:
@@ -553,23 +551,21 @@ class Song(object):
                 continue
             
             last_read = now
-            try: chunk = self._sock.recv(Song.read_chunk_size)
-            except socket.error, err:
-                if err.errno is errno.EWOULDBLOCK:
-                    print "blocking"
-                    yield None
-                    continue
-            else:
-                if chunk:
-                    byte_counter += len(chunk)
-                    mp3_data.append(chunk)
-                    yield chunk
-                    
-                # either the song is done, or we got disconnected.  check
-                # for both
-                else:
-                    if byte_counter == self.song_size: break
-                    else: self._sock = connect(byte_counter)
+            chunk = self._sock.read_until(self.song_size, buf=Song.read_chunk_size)
+            if chunk:
+                byte_counter += len(chunk)
+                mp3_data.append(chunk)
+                yield chunk
+                
+            elif chunk is False:
+                if byte_counter < self.song_size:
+                    print "reconneccting!", byte_counter, self.song_size
+                    self._sock = connect(byte_counter)
+                # done!
+                else: break
+                
+            elif chunk is None:
+                continue
             
         mp3_data = "".join(mp3_data)
         
