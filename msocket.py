@@ -90,8 +90,8 @@ if __name__ == "__main__":
     sock.send("GET / HTTP/1.1\r\nHost: %s\r\n\r\n" % host)
     
     msock = MagicSocket(sock)
-    headers = msock.read_until("\r\n\r\n")
-    headers = headers.split("\r\n")
+    headers = msock.read_until("\r\n\r\n", include_last=True)
+    headers = headers.strip().split("\r\n")
     
     headers = dict([h.split(": ") for h in headers[1:]])
     
