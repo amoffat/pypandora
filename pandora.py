@@ -19,7 +19,6 @@ from pprint import pprint
 import select
 import errno
 import sys
-from msocket import MagicSocket
 
 
 try: from urlparse import parse_qsl
@@ -31,6 +30,15 @@ THIS_DIR = dirname(abspath(__file__))
 TEMPLATE_DIR = join(THIS_DIR, "templates")
 
 
+
+
+
+
+
+settings = {
+    "download_music": False,
+    "download_directory": "/tmp",
+}
 
 
 
@@ -158,38 +166,26 @@ class Connection(object):
         logging.info("authenticating with %s" % email)
         get = {"method": "authenticateListener"}
 
-        authenticated = False
-        authenticate_tries = 3
 
-        while not authenticated and authenticate_tries:
-            logging.info("trying to authenticate with pandora...")
-            body = self.get_template("authenticate", {
-                "timestamp": int(time.time() - self.timeoffset),
-                "email": xml_escape(email),
-                "password": xml_escape(password)
-            })
-            # we use a copy because do some del operations on the dictionary
-            # from within send
-            xml = self.send(get.copy(), body)
-            
-            for el in xml.findall("params/param/value/struct/member"):
-                children = el.getchildren()
-                if children[0].text == "authToken":
-                    self.token = children[1].text
-                elif children[0].text == "listenerId":
-                    self.lid = children[1].text	
+        logging.info("trying to authenticate with pandora...")
+        body = self.get_template("authenticate", {
+            "timestamp": int(time.time() - self.timeoffset),
+            "email": xml_escape(email),
+            "password": xml_escape(password)
+        })
+        # we use a copy because do some del operations on the dictionary
+        # from within send
+        xml = self.send(get.copy(), body)
+        
+        for el in xml.findall("params/param/value/struct/member"):
+            children = el.getchildren()
+            if children[0].text == "authToken":
+                self.token = children[1].text
+            elif children[0].text == "listenerId":
+                self.lid = children[1].text	
 
-            if self.lid: authenticated = True
-            else: 
-                authenticate_tries -= 1
-                logging.error("failed authentication, trying %d more times" % authenticate_tries)
-                time.sleep(1)
-
-        if not authenticated:
-            logging.error("can't authenticiate with pandora?!")
-            raise Exception, "can't authenticate with pandora!?"
-
-        logging.info("authenticated with pandora")
+        if self.lid: return True        
+        return False
 
 
 
@@ -200,27 +196,37 @@ class Account(object):
         self.email = email
         self.password = password
         self._stations = {}
+        self.recently_played = []
 
         if not mp3_cache_dir: mp3_cache_dir = gettempdir()
         self.cache_dir = mp3_cache_dir
 
         self.current_station = None
-        self.current_song = None
+        
+        # this is used just for its fileno() in the case that we have no current
+        # song.  this way, the account object can still work in select.select
+        # (which needs fileno())
+        self._dummy_socket = socket.socket()
 
         self.login()
+        
+    @property
+    def current_song(self):
+        return self.current_station.current_song
 
-    def stop(self):
-        self.current_station.stop()
-
-    def pause(self):
-        self.current_station.pause()
-
+    def fileno(self):
+        if self.current_song: return self.current_song.fileno()
+        else: self._dummy_socket.fileno()
+            
     def login(self):
-        self.connection.sync()
-        self.connection.authenticate(self.email, self.password)
-
-    def logout(self):
-        pass
+        logged_in = False
+        for i in xrange(3):
+            self.connection.sync()
+            if self.connection.authenticate(self.email, self.password):
+                logged_in = True
+                break
+            else: time.sleep(1)
+        if not logged_in: raise Exception, "can't log in"
 
     @property
     def stations(self):
@@ -262,7 +268,6 @@ class Account(object):
 
 class Station(object):    
     PLAYLIST_LENGTH = 5
-    PRELOAD_OFFSET = 60
 
     def __init__(self, account, stationId, stationIdToken, stationName, **kwargs):
         self.account = account
@@ -271,38 +276,25 @@ class Station(object):
         self.name = stationName
         self.current_song = None
         self._playlist = []
-        
-    def play(self, block=False, next_song=False, **kwargs):
-        """ plays the next song in the station playlist """
-        if self.account.current_station and self.account.current_station is self and not next_song:
-            logging.info("%s station is already playing" % self.name)
-            return self.current_song
-        
-        if self.account.current_station: self.account.current_station.stop()
-
-        logging.info("playing station %s" % self.name)
-
-        self.current_song = self.playlist.pop(0)
-        self.account.current_song = self.current_song
-        self.account.current_station = self
-        self.current_song.play(block, **kwargs)
-        return self.current_song
-        
-    def pause(self):
-        self.current_song.pause()
-
-    def stop(self):
-        self.current_song.stop()
 
     def like(self): self.current_song.like()
 
     def dislike(self):
         self.current_song.dislike()
-        return self.next()
-
-    def next(self, **kwargs):
-        return self.play(next_song=True, **kwargs)
-
+        self.next()
+    
+    def play(self):
+        self.account.current_station = self
+        
+        self.playlist.reverse()
+        if self.current_song: self.account.recently_played.append(self.current_song)
+        self.current_song = self.playlist.pop()
+        self.playlist.reverse()
+        self.current_song.play()
+            
+    def next(self):
+        self.play()
+    
     @property
     def playlist(self):
         """ a playlist getter.  each call to Pandora's station api returns maybe
@@ -320,9 +312,7 @@ class Station(object):
         }
 
         got_playlist = False
-        get_playlist_tries = 2
-
-        while not got_playlist and get_playlist_tries:
+        for i in xrange(2):
             body = self.account.connection.get_template("get_playlist", {
                 "timestamp": int(time.time() - self.account.connection.timeoffset),
                 "token": self.account.connection.token,
@@ -342,24 +332,261 @@ class Station(object):
 
             if self._playlist:
                 got_playlist = True
+                break
             else:
-                get_playlist_tries -= 1
                 logging.error("failed to get playlist, trying %d more times" % get_playlist_tries)
                 self.account.login()
 
         if not got_playlist: raise Exception, "can't get playlist!"
-
         return self._playlist
-
-    @staticmethod
-    def finish_cb__play_next(account, station, song):
-        station.next(finished_cb=Station.finish_cb__play_next)
 
     def __repr__(self):
         return "<Station %s: \"%s\">" % (self.id, self.name)
 
     def __str__(self):
         return "%s" % self.name
+
+
+
+
+class Song(object):
+    bitrate = 128
+    read_chunk_size = 4096
+    
+
+    def __init__(self, station, songTitle, artistSummary, audioURL, fileGain, userSeed, musicId, albumTitle, artistArtUrl, **kwargs):
+        self.station = station
+        self.seed = userSeed
+        self.id = musicId
+        self.title = songTitle
+        self.album = albumTitle
+        self.artist = artistSummary
+        self.album_art = artistArtUrl
+
+        self.__dict__.update(kwargs)
+
+
+        self.purchase_itunes =  kwargs.get("itunesUrl", "")
+        if self.purchase_itunes:
+            self.purchase_itunes = urllib.unquote(parse_qsl(self.purchase_itunes)[0][1])
+
+        self.purchase_amazon = kwargs.get("amazonUrl", "")
+
+
+        try: self.gain = float(fileGain)
+        except: self.gain = 0.0
+
+        self.url = self._decrypt_url(audioURL)
+        self.duration = 0
+        self.song_size = None
+        self.download_progress = 0
+
+        def format_title(part):
+            part = part.lower()
+            part = part.replace(" ", "_")
+            part = re.sub("\W", "", part)
+            part = re.sub("_+", "_", part)
+            return part
+
+        self.filename = join(self.station.account.cache_dir, "%s-%s.mp3" % (format_title(artistSummary), format_title(songTitle)))
+
+        self._stream_gen = None
+        self.sock = socket.socket()
+        
+
+    @staticmethod
+    def _decrypt_url(url):
+        """ decrypts the song url where the song stream can be downloaded. """
+        e = url[-48:]
+        d = decrypt(e)
+        url = url.replace(e, d)
+        return url[:-8]
+    
+    @property
+    def position(self):
+        if not self.song_size: return 0
+        return self.duration * self.download_progress / float(self.song_size)
+    
+    @property
+    def play_progress(self):
+        return 100 * self.position / self.duration
+    
+    @property
+    def done(self):
+        return self.position >= self.duration
+    
+    def read(self):
+        if not self._stream_gen: self._stream_gen = self._stream()
+        try: data = self._stream_gen.next()
+        except StopIteration: return False
+        return data
+        
+    def fileno(self):
+        return self.sock.fileno()
+    
+    
+    def stop(self):
+        self.sock.shutdown(socket.SHUT_RDWR)
+        self.sock.close()
+        
+    
+    def play(self):
+        self.station.current_song = self
+        
+
+    def _stream(self):
+        """ a generator which streams some music """
+
+        logging.info("downloading %s" % self.filename)
+        
+
+        # figure out how fast we should download and how long we need to sleep
+        # in between reads.  we have to do this so as to not stream to quickly
+        # from pandora's servers        
+        bytes_per_second = self.bitrate * 125.0
+        sleep_amt = Song.read_chunk_size / bytes_per_second
+
+
+        split = urlsplit(self.url)
+        host = split.netloc
+        path = split.path + "?" + split.query
+
+
+
+        # this is a little helper function because we might need to reconnect
+        # a few times if a read fails.  we'll just pass in the byte_counter
+        # to pick back up where we left off
+        def reconnect():
+            req = """GET %s HTTP/1.0\r\nHost: %s\r\nRange: bytes=%d-\r\nUser-Agent: pypandora\r\nAccept: */*\r\n\r\n"""
+            sock = MagicSocket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((host, 80))
+            sock.send(req % (path, host, self.download_progress))
+            return sock
+        
+        self.sock = reconnect()        
+        
+        # we wait until after we have the headers to switch to non-blocking
+        # just because it's easier that way.  in the worst case scenario,
+        # pandora's servers hang serving up the headers, causing our app to hang
+        headers = self.sock.read_until("\r\n\r\n", include_last=True)
+        headers = headers.strip().split("\r\n")
+        headers = dict([h.split(": ") for h in headers[1:]])
+        self.sock.setblocking(0)
+        yield None
+        
+        # determine the size of the song, and from that, how long the song is
+        # in seconds
+        self.song_size = int(headers["Content-Length"])
+        self.duration = self.song_size / bytes_per_second
+
+
+        mp3_data = []
+        self.download_progress = 0
+        last_read = 0
+        
+        
+        # do the actual reading of the data and yielding it.  if we're
+        # successful, we yield some bytes, if we would block, yield None,
+        while not self.done:
+            
+            # check if it's time to read more music yet
+            now = time.time()
+            if now - last_read < sleep_amt:
+                yield None
+                continue
+            
+            # read until the end of the song, but take a break after each read
+            # so we can do other stuff
+            last_read = now
+            chunk = self.sock.read_until(self.song_size, break_after_read=True, buf=Song.read_chunk_size)
+            
+            # got data?  aggregate it and return it
+            if chunk:
+                self.download_progress += len(chunk)
+                mp3_data.append(chunk)
+                yield chunk
+                
+            # disconnected?  do we need to reconnect, or have we read everything
+            # and the song is done?
+            elif chunk is False:
+                if not self.done:
+                    logging.info("reconnecting at byte %d of %d" % (self.download_progress, self.song_size))
+                    self.sock = reconnect()
+                # done!
+                else: break
+                
+            # are we blocking?  this is normal, keep going
+            elif chunk is None:
+                continue
+            
+            
+            
+        mp3_data = "".join(mp3_data)
+        
+        # tag the mp3
+        tag = ID3Tag()
+        tag.add_id(self.id)
+        tag.add_title(self.title)
+        tag.add_album(self.album)
+        tag.add_artist(self.artist)
+        # can't get this working...
+        #tag.add_image(self.album_art)
+
+        # and write it to the file
+        h = open(self.filename, "w")
+        h.write(tag.binary() + mp3_data)
+        h.close()
+        
+        self.station.next()
+        
+        
+
+    def new_station(self, station_name):
+        """ create a new station from this song """
+        raise NotImplementedError
+
+    def _add_feedback(self, like=True):
+        """ common method called by both like and dislike """
+        conn = self.station.account.connection
+
+        get = {
+            "method": "addFeedback",
+            "lid":  conn.lid,
+            "arg1": self.station.id,
+            "arg2": self.id,
+            "arg3": self.seed,
+            "arg4": 0, "arg5": str(like).lower(), "arg6": "false", "arg7": 1
+        }
+        body = conn.get_template("add_feedback", {
+            "timestamp": int(time.time() - conn.timeoffset),
+            "station_id": self.station.id,
+            "token": conn.token,
+            "music_id": self.id,
+            "seed": self.seed,
+            "arg4": 0, "arg5": int(like), "arg6": 0, "arg7": 1
+        })
+        xml = conn.send(get, body)
+
+    def like(self):
+        logging.info("liking %s" % self)
+        self._add_feedback(like=True)
+
+    def dislike(self, **kwargs):
+        _pandora.stop()
+        logging.info("disliking %s" % self)
+        self._add_feedback(like=False)
+        return self.station.next(**kwargs)
+
+    def __str__(self):
+        minutes = int(math.floor(float(self.length) / 60))
+        seconds = int(self.length - (minutes * 60))
+        return "\"%s\" by %s (%d:%02d) (%+.2f)" % (self.title, self.artist, minutes, seconds, self.gain)
+
+    def __repr__(self):
+        return "<Song \"%s\" by \"%s\">" % (self.title, self.artist)
+
+
+
 
 
 class ID3Tag(object):
@@ -431,208 +658,6 @@ class ID3Tag(object):
         x_final = x_final | (c << 16);
         x_final = x_final | (d << 24);
         return x_final
-
-
-class Song(object):
-    bitrate = 128
-    read_chunk_size = 4096
-    
-
-    def __init__(self, station, songTitle, artistSummary, audioURL, fileGain, userSeed, musicId, albumTitle, artistArtUrl, **kwargs):
-        self.station = station
-        self.seed = userSeed
-        self.id = musicId
-        self.title = songTitle
-        self.album = albumTitle
-        self.artist = artistSummary
-        self.album_art = artistArtUrl
-
-        self.__dict__.update(kwargs)
-
-
-        self.purchase_itunes =  kwargs.get("itunesUrl", "")
-        if self.purchase_itunes:
-            self.purchase_itunes = urllib.unquote(parse_qsl(self.purchase_itunes)[0][1])
-
-        self.purchase_amazon = kwargs.get("amazonUrl", "")
-
-
-        try: self.gain = float(fileGain)
-        except: self.gain = 0.0
-
-        self.url = self._decrypt_url(audioURL)
-        self.length = 0 # will be populated when played
-
-        def format_title(part):
-            part = part.lower()
-            part = part.replace(" ", "_")
-            part = re.sub("\W", "", part)
-            part = re.sub("_+", "_", part)
-            return part
-
-        self.filename = join(self.station.account.cache_dir, "%s-%s.mp3" % (format_title(artistSummary), format_title(songTitle)))
-
-        self.started = None
-        self.stopped = None
-        self.paused = False
-
-        self.done = False # if the song has finished playing
-        self.progress = 0 # number of seconds that have passed in playing
-
-        self._stream_gen = None
-        self._sock = socket.socket()
-        
-
-    @staticmethod
-    def _decrypt_url(url):
-        """ decrypts the song url where the song stream can be downloaded.  the
-        last 48 bytes are encrypted, so we pass those bytes to the c extension
-        and then tack the decrypted value back onto the url """
-        e = url[-48:]
-        d = decrypt(e)
-        url = url.replace(e, d)
-        return url[:-8]
-
-    def load(self, block=False):
-        if block: return self._download()
-        
-    def fileno(self):
-        return self._sock.fileno()
-    
-    def read(self):
-        if not self._stream_gen: self._stream_gen = self._stream()
-        try: data = self._stream_gen.next()
-        except StopIteration: return False
-        return data
-
-    def _stream(self):
-        """ downloads the song file from Pandora's servers, returning the
-        filename when complete.  if the file already exists in the cache
-        directory, just return that """
-
-        logging.info("downloading %s" % self.filename)
-        
-        
-        bytes_per_second = self.bitrate * 125.0
-        sleep_amt = Song.read_chunk_size / bytes_per_second
-
-
-        split = urlsplit(self.url)
-        host = split.netloc
-        path = split.path + "?" + split.query
-        
-        req_template = """GET %s HTTP/1.0\r\nHost: %s\r\nRange: bytes=%d-\r\nUser-Agent: pypandora\r\nAccept: */*\r\n\r\n"""
-
-        def connect(start=0):
-            sock = MagicSocket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect((host, 80))
-            sock.send(req_template % (path, host, start))
-            return sock
-        
-        self._sock = connect()
-        
-        
-        headers = self._sock.read_until("\r\n\r\n", break_after_read=False, include_last=True)
-        headers = headers.strip().split("\r\n")
-        headers = dict([h.split(": ") for h in headers[1:]])
-        self._sock.setblocking(0)
-        
-        self.song_size = int(headers["Content-Length"])
-        self.duration = self.song_size / bytes_per_second
-
-        mp3_data = []
-        byte_counter = 0
-        last_read = 0
-        
-        while True:
-            now = time.time()
-            if now - last_read < sleep_amt:
-                yield None
-                continue
-            
-            last_read = now
-            chunk = self._sock.read_until(self.song_size, buf=Song.read_chunk_size)
-            if chunk:
-                byte_counter += len(chunk)
-                mp3_data.append(chunk)
-                yield chunk
-                
-            elif chunk is False:
-                if byte_counter < self.song_size:
-                    print "reconneccting!", byte_counter, self.song_size
-                    self._sock = connect(byte_counter)
-                # done!
-                else: break
-                
-            elif chunk is None:
-                continue
-            
-        mp3_data = "".join(mp3_data)
-        
-        
-
-        # tag it
-        tag = ID3Tag()
-        tag.add_id(self.id)
-        tag.add_title(self.title)
-        tag.add_album(self.album)
-        tag.add_artist(self.artist)
-        # can't get this working...
-        #tag.add_image(self.album_art)
-
-        # write it
-        h = open(self.filename, "w")
-        h.write(tag.binary() + mp3_data)
-        h.close()
-        
-
-    def new_station(self, station_name):
-        """ create a new station from this song """
-        raise NotImplementedError
-
-    def _add_feedback(self, like=True):
-        """ common method called by both like and dislike """
-        conn = self.station.account.connection
-
-        get = {
-            "method": "addFeedback",
-            "lid":  conn.lid,
-            "arg1": self.station.id,
-            "arg2": self.id,
-            "arg3": self.seed,
-            "arg4": 0, "arg5": str(like).lower(), "arg6": "false", "arg7": 1
-        }
-        body = conn.get_template("add_feedback", {
-            "timestamp": int(time.time() - conn.timeoffset),
-            "station_id": self.station.id,
-            "token": conn.token,
-            "music_id": self.id,
-            "seed": self.seed,
-            "arg4": 0, "arg5": int(like), "arg6": 0, "arg7": 1
-        })
-        xml = conn.send(get, body)
-
-    def like(self):
-        logging.info("liking %s" % self)
-        self._add_feedback(like=True)
-
-    def dislike(self, **kwargs):
-        _pandora.stop()
-        logging.info("disliking %s" % self)
-        self._add_feedback(like=False)
-        return self.station.next(**kwargs)
-
-    def __str__(self):
-        minutes = int(math.floor(float(self.length) / 60))
-        seconds = int(self.length - (minutes * 60))
-        return "\"%s\" by %s (%d:%02d) (%+.2f)" % (self.title, self.artist, minutes, seconds, self.gain)
-
-    def __repr__(self):
-        return "<Song \"%s\" by \"%s\">" % (self.title, self.artist)
-
-
-
-
 
 
 
@@ -1134,17 +1159,89 @@ in_key_s = [[
 
 
 
+class MagicSocket(socket.socket):
+    """ this is a socket subclass that simplifies reading until a specific
+    delimeter (for example, end of http headers) and reading until a specific
+    amount has been read (for example, reading the body of an http response
+    based on the content-length in the http headers).  it gets kind of
+    complicated when you add in non-blocking sockets..."""
+    
+    def __init__(self, *args, **kwargs):
+        self.tmp_buffer = ""
+        self._read_gen = None
+        super(MagicSocket, self).__init__(*args, **kwargs)
+        
+    def read_until(self, *delims, **kwargs):
+        if not self._read_gen: self._read_gen = self._read_until(*delims, **kwargs)
+        ret =  self._read_gen.next()
+        if ret: self._read_gen = None
+        return ret
+        
+    def _read_until(self, *delims, **kwargs):
+        buf = kwargs.get("buf", 1024)
+        break_after_read = kwargs.get("break_after_read", False)
+        include_last = kwargs.get("include_last", False)
 
-player = """<!DOCTYPE html>
-<html>
-    <body>
-        <audio preload="none" autoplay="autoplay" controls="controls">
-            <source src="http://localhost:8080/m" type="audio/mp3"/>
-            Your browser does not support the audio element.
-        </audio>
-    </body>
-</html>
-"""
+        num_bytes = 0
+        if len(delims) == 1 and isinstance(delims[0], int):
+            num_bytes = delims[0]
+            
+        read = ""
+        cursor = 0
+        last_cursor = None
+        first_find = None
+        
+        delims = list(delims)
+        delims.reverse()
+        current_delim = delims.pop()
+        
+        def recv(buf):
+            read = ""
+            if self.tmp_buffer:
+                read += self.tmp_buffer[:buf]
+                self.tmp_buffer = self.tmp_buffer[buf:]
+                buf -= len(read)
+                if not buf: return read     
+            return read + self.recv(buf)
+        
+        while True:
+            if not num_bytes:
+                # search through the data we have for the delimiters
+                lread = len(read)
+                while cursor < lread and cursor != last_cursor:
+                    found = read.find(current_delim, cursor)
+                    last_cursor = cursor
+                    if found == -1:
+                        cursor = lread - len(current_delim)
+                    else:
+                        if first_find is None: first_find = found
+                        cursor = found + len(current_delim)
+                        try: current_delim = delims.pop()
+                        except IndexError:
+                            if first_find == found: first_find = 0
+                            
+                            if include_last:
+                                self.tmp_buffer = read[found+len(current_delim):]
+                                yield read[first_find:found+len(current_delim)]
+                            else:
+                                self.tmp_buffer = read[found:]
+                                yield read[first_find:found]
+             
+                last_cursor = None
+            
+            
+            try: data = recv(buf)
+            except socket.error, err:
+                if err.errno is errno.EWOULDBLOCK: yield None
+                else: yield False
+            else:
+                if not data: yield False
+                if break_after_read: yield data
+                
+                read += data
+                if num_bytes and len(read) >= num_bytes and not break_after_read:
+                    self.tmp_buffer = read[num_bytes:]
+                    yield read[:num_bytes]
 
 
 
@@ -1203,7 +1300,9 @@ class WebConnection(object):
 
 
     def serve_webpage(self):
-        page = player
+        h = open("index.html", "r")
+        page = h.read()
+        
         try:
             self.sock.send("HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n" % len(page))
             self.sock.send(page)
@@ -1240,12 +1339,19 @@ class WebConnection(object):
 
         
 class PlayerServer(object):
-    def __init__(self):
-        self.to_read = set()
+    def __init__(self, pandora_account):
+        self.account = pandora_account
+        
+        # play a random station
+        from random import choice
+        random_station = choice(pandora_account.stations.values())
+        random_station.play()
+        
+        self.to_read = set([self.account])
         self.to_write = set()
         self.to_err = set()
         self.callbacks = []
-        self.music_buffer = ""
+        
 
     def serve(self):
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -1256,12 +1362,14 @@ class PlayerServer(object):
         
         self.to_read.add(server)
         last_music_read = time.time()
+        music_buffer = ""
         
         while True:
             read, write, err = select.select(
                 self.to_read,
                 self.to_write,
                 self.to_err,
+                0
             )
             
             for sock in read:
@@ -1273,14 +1381,17 @@ class PlayerServer(object):
                     self.to_read.add(conn)
                     self.to_err.add(conn)
                     
-                elif isinstance(sock, Song):
-                    chunk = sock.read()
-                    if chunk: self.music_buffer = chunk
+                elif sock is self.account:
+                    chunk = sock.current_song.read()
+                    if chunk: music_buffer = chunk
+                    
                 else:
                     if sock.path:                    
                         #sock.shutdown(socket.SHUT_RD)
                         self.to_read.remove(sock)
                         self.to_write.add(sock)
+                    
+                    
                     
             for sock in write:
                 if sock.path == "/":
@@ -1289,9 +1400,13 @@ class PlayerServer(object):
                     self.to_write.remove(sock)
                     self.to_err.remove(sock)
                     
+                elif sock.path == "/a":
+                    pass
+                    
                 elif sock.path == "/m":
-                    done = sock.stream_music(self.music_buffer)
-                    if done: self.to_write.remove(sock)
+                    if music_buffer:
+                        done = sock.stream_music(music_buffer)
+                        if done: self.to_write.remove(sock)
                     
                 else:
                     sock.close()
@@ -1344,13 +1459,5 @@ if __name__ == "__main__":
         debug_logger.addHandler(lh)
 
     account = Account(options.user, options.password, debug=options.debug)
-
-    # play a random station
-    from random import choice
-    random_station = choice(account.stations.values())
-    song = random_station.playlist[0]
-
-
-    server = PlayerServer()
-    server.to_read.add(song)
+    server = PlayerServer(account)
     server.serve()

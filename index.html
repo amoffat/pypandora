@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
+	</head>
+	
+    <body>
+        <audio preload="none" autoplay="autoplay">
+            <source src="http://localhost:8080/m" type="audio/mp3"/>
+            Your browser does not support the audio element.
+        </audio>
+        
+        <div>
+        	<button>next</button>
+        </div>
+        
+        <script type="text/javascript">
+        
+        	function long_poll() {
+        		$.get("/l", {}, function() {
+        			
+        		});
+        	}
+        
+        	function control(data, success) {
+        		$.get("/a", data, success);
+        	}
+        	
+        	$(function() {
+        		alert("derp");
+        	});
+        </script>
+        
+    </body>
+</html>
