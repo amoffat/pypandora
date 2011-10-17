@@ -19,10 +19,11 @@ from pprint import pprint
 import select
 import errno
 import sys
+import json
 
 
-try: from urlparse import parse_qsl
-except ImportError: from cgi import parse_qsl
+try: from urlparse import parse_qsl, parse_qs
+except ImportError: from cgi import parse_qsl, parse_qs
 
 
 
@@ -207,8 +208,11 @@ class Account(object):
         # song.  this way, the account object can still work in select.select
         # (which needs fileno())
         self._dummy_socket = socket.socket()
-
         self.login()
+        
+    def handle_read(self, to_read, to_write, to_err, shared_data):
+        chunk = self.current_song.read()
+        if chunk: shared_data["music_buffer"] = chunk
         
     @property
     def current_song(self):
@@ -483,15 +487,14 @@ class Song(object):
         mp3_data = []
         self.download_progress = 0
         last_read = 0
-        
-        
+
         # do the actual reading of the data and yielding it.  if we're
         # successful, we yield some bytes, if we would block, yield None,
         while not self.done:
             
             # check if it's time to read more music yet
             now = time.time()
-            if now - last_read < sleep_amt:
+            if now - last_read < sleep_amt and self.download_progress > 262144:
                 yield None
                 continue
             
@@ -1169,7 +1172,15 @@ class MagicSocket(socket.socket):
     def __init__(self, *args, **kwargs):
         self.tmp_buffer = ""
         self._read_gen = None
-        super(MagicSocket, self).__init__(*args, **kwargs)
+        
+        sock = kwargs.get("sock")
+        if sock: self._sock = sock
+        else:
+            self._sock = self
+            super(MagicSocket, self).__init__(*args, **kwargs)
+            
+    def __getattr__(self, name):
+        return getattr(self._sock, name)
         
     def read_until(self, *delims, **kwargs):
         if not self._read_gen: self._read_gen = self._read_until(*delims, **kwargs)
@@ -1202,7 +1213,7 @@ class MagicSocket(socket.socket):
                 self.tmp_buffer = self.tmp_buffer[buf:]
                 buf -= len(read)
                 if not buf: return read     
-            return read + self.recv(buf)
+            return read + self._sock.recv(buf)
         
         while True:
             if not num_bytes:
@@ -1260,44 +1271,95 @@ class WebConnection(object):
     def __init__(self, sock):
         self.sock = sock
         
-        self._path = None
-        self._path_gen = None
+        self.headers = None
+        self.path = None
+        self._request_gen = None
         
         self._stream_gen = None
         self._last_streamed = ""
+        
+        
+    def handle_read(self, to_read, to_write, to_err, shared_data):
+        ret = self.request_read
+        if ret:
+            to_read.remove(self)
+            to_write.add(self)
+        elif ret is False:
+            to_read.remove(self)
+    
+    def handle_write(self, to_read, to_write, to_err, shared_data):
+        if self.path == "/":
+            self.serve_webpage()
+            self.close()
+            to_write.remove(self)
+            to_err.remove(self)
+            
+        # long-polling requests
+        elif self.path == "/events":
+            pass
+           
+        elif self.path == "/control":
+            print self.params
+            self.send_json({"status": True})
+            self.close()
+            to_write.remove(self)
+            to_err.remove(self)
+           
+        elif self.path == "/m":
+            if shared_data["music_buffer"]:
+                done = self.stream_music(shared_data["music_buffer"])
+                if done:
+                    self.close()
+                    to_write.remove(self)
+                    to_err.remove(self)
+           
+        else:
+            self.close()
+            to_write.remove(self)
+            to_err.remove(self)
+                   
         
     def fileno(self):
         return self.sock.fileno()
     
     @property
-    def path(self):
-        if self._path: return self._path
-        if not self._path_gen: self._path_gen = self.read_request()
-        self._path = self._path_gen.next()
-        return self._path
+    def request_read(self):
+        if not self._request_gen: self._request_gen = self.read_request()
+        return self._request_gen.next()
     
     def close(self):
-        self.sock.shutdown(socket.SHUT_RDWR)
+        try: self.sock.shutdown(socket.SHUT_RDWR)
+        except: pass
         self.sock.close()
     
-    def read_request(self):            
-        agg_data = ""
-        while True:
-            try: data = self.sock.recv(1)
-            except socket.error, e:
-                if e.errno == errno.EWOULDBLOCK:
-                    yield False
-                    continue
-                else:
-                    print sys.exc_info()
-                    yield True
-                    raise StopIteration
-                
-            agg_data += data
-            if "\r\n" in agg_data: break
-        path = agg_data.strip().split()[1]
-        yield path      
-
+    def read_request(self):
+        headers = None
+        
+        while not headers:
+            headers = self.sock.read_until("\r\n\r\n", include_last=True)
+            if headers is None: yield None
+            elif headers is False:
+                yield False
+                raise StopIteration
+        
+        headers = headers.strip().split("\r\n")
+        headers.reverse()
+        get_string = headers.pop()
+        headers.reverse()
+        
+        url = get_string.split()[1]
+        url = urlsplit(url)
+        
+        self.path = url.path
+        self.params = dict(parse_qsl(url.query))        
+        self.headers = dict([h.split(": ") for h in headers])
+        yield True
+        
+        
+    def send_json(self, data):
+        data = json.dumps(data)
+        self.sock.send("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %s\r\n\r\n" % len(data))
+        self.sock.send(data)
 
     def serve_webpage(self):
         h = open("index.html", "r")
@@ -1307,7 +1369,7 @@ class WebConnection(object):
             self.sock.send("HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n" % len(page))
             self.sock.send(page)
         except:
-            print sys.exc_info()
+            print "serving webpage", sys.exc_info()
     
 
     def stream_music(self, music):
@@ -1316,6 +1378,7 @@ class WebConnection(object):
             done = self._stream_gen.next()
         else: done = self._stream_gen.send(music)
         return done            
+
 
     def send_stream(self, music):
         self.sock.send("HTTP/1.1 200 OK\r\n\r\n")
@@ -1327,7 +1390,7 @@ class WebConnection(object):
                     if e.errno == errno.EWOULDBLOCK:
                         pass
                     else:
-                        print sys.exc_info()
+                        print "streaming", sys.exc_info()
                         break
                 
             self._last_streamed = music
@@ -1340,14 +1403,14 @@ class WebConnection(object):
         
 class PlayerServer(object):
     def __init__(self, pandora_account):
-        self.account = pandora_account
+        self.pandora_account = pandora_account
         
         # play a random station
         from random import choice
         random_station = choice(pandora_account.stations.values())
         random_station.play()
         
-        self.to_read = set([self.account])
+        self.to_read = set([self.pandora_account])
         self.to_write = set()
         self.to_err = set()
         self.callbacks = []
@@ -1363,6 +1426,10 @@ class PlayerServer(object):
         self.to_read.add(server)
         last_music_read = time.time()
         music_buffer = ""
+        shared_data = {
+            "music_buffer": ""
+        }
+        
         
         while True:
             read, write, err = select.select(
@@ -1377,42 +1444,18 @@ class PlayerServer(object):
                     conn, addr = server.accept()
                     conn.setblocking(0)
                     
-                    conn = WebConnection(conn)
+                    conn = WebConnection(MagicSocket(sock=conn))
                     self.to_read.add(conn)
                     self.to_err.add(conn)
                     
-                elif sock is self.account:
-                    chunk = sock.current_song.read()
-                    if chunk: music_buffer = chunk
-                    
                 else:
-                    if sock.path:                    
-                        #sock.shutdown(socket.SHUT_RD)
-                        self.to_read.remove(sock)
-                        self.to_write.add(sock)
-                    
+                     sock.handle_read(self.to_read, self.to_write, self.to_err, shared_data)                    
                     
                     
             for sock in write:
-                if sock.path == "/":
-                    sock.serve_webpage()
-                    sock.close()
-                    self.to_write.remove(sock)
-                    self.to_err.remove(sock)
-                    
-                elif sock.path == "/a":
-                    pass
-                    
-                elif sock.path == "/m":
-                    if music_buffer:
-                        done = sock.stream_music(music_buffer)
-                        if done: self.to_write.remove(sock)
-                    
-                else:
-                    sock.close()
-                    self.to_write.remove(sock)
-                    self.to_err.remove(sock)
-                    
+                sock.handle_write(self.to_read, self.to_write, self.to_err, shared_data)
+
+
             for cb in self.callbacks: cb()
             time.sleep(.01)
             

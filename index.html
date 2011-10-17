@@ -11,23 +11,27 @@
         </audio>
         
         <div>
-        	<button>next</button>
+        	<button id="next">next</button>
         </div>
         
         <script type="text/javascript">
         
+        	var lp_cursor = "";
+        
         	function long_poll() {
-        		$.get("/l", {}, function() {
+        		$.get("/events", {cursor: lp_cursor}, function(data) {
         			
         		});
         	}
         
         	function control(data, success) {
-        		$.get("/a", data, success);
+        		$.get("/control", data, success);
         	}
         	
-        	$(function() {
-        		alert("derp");
+        	$(function() {        		
+        		$("#next").click(function() {
+        			control({"player": "next"})
+        		});
         	});
         </script>
         
