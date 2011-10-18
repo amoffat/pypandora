@@ -214,6 +214,9 @@ class Account(object):
         chunk = self.current_song.read()
         if chunk: shared_data["music_buffer"] = chunk
         
+    def next(self):
+        if self.current_station: self.current_station.next()
+        
     @property
     def current_song(self):
         return self.current_station.current_song
@@ -449,6 +452,8 @@ class Song(object):
         # from pandora's servers        
         bytes_per_second = self.bitrate * 125.0
         sleep_amt = Song.read_chunk_size / bytes_per_second
+        
+        #sleep_amt += 1
 
 
         split = urlsplit(self.url)
@@ -494,7 +499,7 @@ class Song(object):
             
             # check if it's time to read more music yet
             now = time.time()
-            if now - last_read < sleep_amt and self.download_progress > 262144:
+            if now - last_read < sleep_amt: #and self.download_progress > 262144:
                 yield None
                 continue
             
@@ -1268,7 +1273,8 @@ class MagicSocket(socket.socket):
 
 
 class WebConnection(object):
-    def __init__(self, sock):
+    def __init__(self, sock, pandora_account):
+        self.pandora_account = pandora_account
         self.sock = sock
         
         self.headers = None
@@ -1299,7 +1305,10 @@ class WebConnection(object):
             pass
            
         elif self.path == "/control":
-            print self.params
+            player_cmd = self.params.get("player")
+            if player_cmd == "next":
+                self.pandora_account.next()
+            
             self.send_json({"status": True})
             self.close()
             to_write.remove(self)
@@ -1390,7 +1399,6 @@ class WebConnection(object):
                     if e.errno == errno.EWOULDBLOCK:
                         pass
                     else:
-                        print "streaming", sys.exc_info()
                         break
                 
             self._last_streamed = music
@@ -1419,7 +1427,7 @@ class PlayerServer(object):
     def serve(self):
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind(('', 8080))
+        server.bind(('', 7000))
         server.listen(100)
         server.setblocking(0)
         
@@ -1444,7 +1452,7 @@ class PlayerServer(object):
                     conn, addr = server.accept()
                     conn.setblocking(0)
                     
-                    conn = WebConnection(MagicSocket(sock=conn))
+                    conn = WebConnection(MagicSocket(sock=conn), self.pandora_account)
                     self.to_read.add(conn)
                     self.to_err.add(conn)
                     

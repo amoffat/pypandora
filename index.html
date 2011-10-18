@@ -2,14 +2,12 @@
 <html>
 	<head>
 		<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
+		<script type="text/javascript" src="http://jplayer.org/latest/js/jquery.jplayer.min.js"></script>
 	</head>
 	
     <body>
-        <audio preload="none" autoplay="autoplay">
-            <source src="http://localhost:8080/m" type="audio/mp3"/>
-            Your browser does not support the audio element.
-        </audio>
-        
+    	<div id="jquery_jplayer"></div>
+
         <div>
         	<button id="next">next</button>
         </div>
@@ -29,6 +27,19 @@
         	}
         	
         	$(function() {        		
+        		$("#jquery_jplayer").jPlayer({
+        			ready: function () {
+        				$(this).jPlayer("setMedia", {
+        					mp3:"http://localhost:7000/m"
+        				}).jPlayer("play");
+        			},
+        			preload: "none",
+        			//swfPath: "file:///home/amoffat/workspace/pypandora/jplayer/",
+        			supplied: "mp3",
+        			wmode: "window"
+        		});
+
+        		
         		$("#next").click(function() {
         			control({"player": "next"})
         		});
