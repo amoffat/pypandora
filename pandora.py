@@ -1279,6 +1279,7 @@ class WebConnection(object):
         
         self.headers = None
         self.path = None
+        self.params = {}
         self._request_gen = None
         
         self._stream_gen = None
@@ -1301,8 +1302,11 @@ class WebConnection(object):
             to_err.remove(self)
             
         # long-polling requests
-        elif self.path == "/events":
-            pass
+        elif self.path == "/messages":
+            self.params
+            self.close()
+            to_write.remove(self)
+            to_err.remove(self)
            
         elif self.path == "/control":
             player_cmd = self.params.get("player")
@@ -1435,7 +1439,8 @@ class PlayerServer(object):
         last_music_read = time.time()
         music_buffer = ""
         shared_data = {
-            "music_buffer": ""
+            "music_buffer": "",
+            "messages": []
         }
         
         
