@@ -62,6 +62,7 @@ class Connection(object):
         self.timeoffset = time.time()
         self.token = None
         self.lid = None # listener id
+        
 
     @staticmethod
     def dump_xml(x):
@@ -1284,6 +1285,7 @@ class WebConnection(object):
         
         self._stream_gen = None
         self._last_streamed = ""
+        self.music_buffer = deque(maxlen=100)
         
         
     def handle_read(self, to_read, to_write, to_err, shared_data):
@@ -1437,7 +1439,6 @@ class PlayerServer(object):
         
         self.to_read.add(server)
         last_music_read = time.time()
-        music_buffer = ""
         shared_data = {
             "music_buffer": "",
             "messages": []

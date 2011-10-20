@@ -46,11 +46,17 @@
 	</head>
 	
     <body>
+    
+    	<ul>
+    	</ul>
+    	
     	<div id="jquery_jplayer"></div>
 
+		<!--
         <div>
         	<button class="minimal" id="next">next</button>
         </div>
+        -->
         
         <script type="text/javascript">
         
@@ -66,15 +72,14 @@
         		$.get("/control", data, success);
         	}
         	
-        	$(function() {        		
+        	$(function() {        		 
         		$("#jquery_jplayer").jPlayer({
+        			solution: "html,flash",
         			ready: function () {
-        				$(this).jPlayer("setMedia", {
-        					mp3:"http://localhost:7000/m"
-        				}).jPlayer("play");
+        				$(this).jPlayer("setMedia", {mp3:"/m"}).jPlayer("play");
         			},
         			preload: "none",
-        			//swfPath: "file:///home/amoffat/workspace/pypandora/jplayer/",
+        			swfPath: "http://jplayer.org/latest/js/",
         			supplied: "mp3",
         			wmode: "window"
         		});
