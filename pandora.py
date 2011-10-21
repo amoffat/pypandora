@@ -20,6 +20,7 @@ import select
 import errno
 import sys
 import json
+from Queue import Queue
 
 
 try: from urlparse import parse_qsl, parse_qs
@@ -212,8 +213,11 @@ class Account(object):
         self.login()
         
     def handle_read(self, to_read, to_write, to_err, shared_data):
+        if shared_data["music_buffer"].full():
+            print "full"
+            return
         chunk = self.current_song.read()
-        if chunk: shared_data["music_buffer"] = chunk
+        if chunk: shared_data["music_buffer"].put(chunk)
         
     def next(self):
         if self.current_station: self.current_station.next()
@@ -359,7 +363,7 @@ class Station(object):
 
 class Song(object):
     bitrate = 128
-    read_chunk_size = 4096
+    read_chunk_size = 1024
     
 
     def __init__(self, station, songTitle, artistSummary, audioURL, fileGain, userSeed, musicId, albumTitle, artistArtUrl, **kwargs):
@@ -454,7 +458,10 @@ class Song(object):
         bytes_per_second = self.bitrate * 125.0
         sleep_amt = Song.read_chunk_size / bytes_per_second
         
-        #sleep_amt += 1
+        # so we know how short of time we have to sleep to stream perfectly,
+        # but we're going to lower it by a third, so we never suffer from
+        # a buffer underrun
+        sleep_amt *= .66666
 
 
         split = urlsplit(self.url)
@@ -498,9 +505,9 @@ class Song(object):
         # successful, we yield some bytes, if we would block, yield None,
         while not self.done:
             
-            # check if it's time to read more music yet
+            # check if it's time to read more music yet.
             now = time.time()
-            if now - last_read < sleep_amt: #and self.download_progress > 262144:
+            if now - last_read < sleep_amt and self.download_progress > 262144:
                 yield None
                 continue
             
@@ -1284,8 +1291,6 @@ class WebConnection(object):
         self._request_gen = None
         
         self._stream_gen = None
-        self._last_streamed = ""
-        self.music_buffer = deque(maxlen=100)
         
         
     def handle_read(self, to_read, to_write, to_err, shared_data):
@@ -1321,12 +1326,14 @@ class WebConnection(object):
             to_err.remove(self)
            
         elif self.path == "/m":
-            if shared_data["music_buffer"]:
-                done = self.stream_music(shared_data["music_buffer"])
-                if done:
-                    self.close()
-                    to_write.remove(self)
-                    to_err.remove(self)
+            try: chunk = shared_data["music_buffer"].get(False)
+            except: return
+            
+            done = self.stream_music(chunk)
+            if done:
+                self.close()
+                to_write.remove(self)
+                to_err.remove(self)
            
         else:
             self.close()
@@ -1399,15 +1406,13 @@ class WebConnection(object):
         self.sock.send("HTTP/1.1 200 OK\r\n\r\n")
         
         while True:
-            if self._last_streamed != music:
-                try: sent = self.sock.send(music)
-                except socket.error, e:
-                    if e.errno == errno.EWOULDBLOCK:
-                        pass
-                    else:
-                        break
+            try: sent = self.sock.send(music)
+            except socket.error, e:
+                if e.errno == errno.EWOULDBLOCK:
+                    pass
+                else:
+                    break
                 
-            self._last_streamed = music
             music = (yield False)   
         yield True
         
@@ -1440,7 +1445,7 @@ class PlayerServer(object):
         self.to_read.add(server)
         last_music_read = time.time()
         shared_data = {
-            "music_buffer": "",
+            "music_buffer": Queue(100),
             "messages": []
         }
         
