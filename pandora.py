@@ -31,7 +31,7 @@ except ImportError: from cgi import parse_qsl, parse_qs
 THIS_DIR = dirname(abspath(__file__))
 TEMPLATE_DIR = join(THIS_DIR, "templates")
 
-
+music_buffer_size = 30
 
 
 
@@ -213,11 +213,9 @@ class Account(object):
         self.login()
         
     def handle_read(self, to_read, to_write, to_err, shared_data):
-        if shared_data["music_buffer"].full():
-            print "full"
-            return
+        if shared_data["music_buffers"][0].full(): return
         chunk = self.current_song.read()
-        if chunk: shared_data["music_buffer"].put(chunk)
+        if chunk: shared_data["music_buffers"][0].put(chunk)
         
     def next(self):
         if self.current_station: self.current_station.next()
@@ -366,16 +364,17 @@ class Song(object):
     read_chunk_size = 1024
     
 
-    def __init__(self, station, songTitle, artistSummary, audioURL, fileGain, userSeed, musicId, albumTitle, artistArtUrl, **kwargs):
+    def __init__(self, station, **kwargs):
         self.station = station
-        self.seed = userSeed
-        self.id = musicId
-        self.title = songTitle
-        self.album = albumTitle
-        self.artist = artistSummary
-        self.album_art = artistArtUrl
 
         self.__dict__.update(kwargs)
+        
+        self.seed = self.userSeed
+        self.id = self.musicId
+        self.title = self.songTitle
+        self.album = self.albumTitle
+        self.artist = self.artistSummary
+        self.album_art = self.artistArtUrl
 
 
         self.purchase_itunes =  kwargs.get("itunesUrl", "")
@@ -388,7 +387,7 @@ class Song(object):
         try: self.gain = float(fileGain)
         except: self.gain = 0.0
 
-        self.url = self._decrypt_url(audioURL)
+        self.url = self._decrypt_url(self.audioURL)
         self.duration = 0
         self.song_size = None
         self.download_progress = 0
@@ -400,10 +399,23 @@ class Song(object):
             part = re.sub("_+", "_", part)
             return part
 
-        self.filename = join(self.station.account.cache_dir, "%s-%s.mp3" % (format_title(artistSummary), format_title(songTitle)))
+        self.filename = join(self.station.account.cache_dir, "%s-%s.mp3" % (format_title(self.artist), format_title(self.title)))
 
         self._stream_gen = None
         self.sock = socket.socket()
+        
+    @property
+    def json_data(self):
+        return {
+            "album_art": self.album_art,
+            "title": self.title,
+            "album": self.album,
+            "artist": self.artist,
+            "purchase_itunes": self.purchase_itunes,
+            "purchase_amazon": self.purchase_amazon,
+            "gain": self.gain,
+            "duration": self.duration,
+        }
         
 
     @staticmethod
@@ -425,7 +437,7 @@ class Song(object):
     
     @property
     def done(self):
-        return self.position >= self.duration
+        return self.download_progress == self.song_size
     
     def read(self):
         if not self._stream_gen: self._stream_gen = self._stream()
@@ -1314,10 +1326,17 @@ class WebConnection(object):
             self.close()
             to_write.remove(self)
             to_err.remove(self)
+            
+        elif self.path == "/current_song_info":
+            self.send_json(self.pandora_account.current_song.json_data)
+            self.close()
+            to_write.remove(self)
+            to_err.remove(self)
            
         elif self.path == "/control":
             player_cmd = self.params.get("player")
             if player_cmd == "next":
+                shared_data["music_buffers"][0] = Queue(music_buffer_size)
                 self.pandora_account.next()
             
             self.send_json({"status": True})
@@ -1326,7 +1345,7 @@ class WebConnection(object):
             to_err.remove(self)
            
         elif self.path == "/m":
-            try: chunk = shared_data["music_buffer"].get(False)
+            try: chunk = shared_data["music_buffers"][0].get(False)
             except: return
             
             done = self.stream_music(chunk)
@@ -1445,7 +1464,10 @@ class PlayerServer(object):
         self.to_read.add(server)
         last_music_read = time.time()
         shared_data = {
-            "music_buffer": Queue(100),
+            "music_buffers": [
+                Queue(music_buffer_size),
+                Queue(music_buffer_size),
+            ],
             "messages": []
         }
         
