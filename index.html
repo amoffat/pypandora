@@ -5,67 +5,22 @@
 		<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js"></script>
 		<script type="text/javascript" src="http://jplayer.org/latest/js/jquery.jplayer.min.js"></script>
 		
-		<link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/redmond/jquery-ui.css" type="text/css" media="all" />
-		
 		<style type="text/css">
-			button.minimal {
-				background: #e3e3e3;
-				border: 1px solid #bbb;
-				-webkit-border-radius: 3px;
-				-moz-border-radius: 3px;
-				-ms-border-radius: 3px;
-				-o-border-radius: 3px;
-				border-radius: 3px;
-				-webkit-box-shadow: inset 0 0 1px 1px #f6f6f6;
-				-moz-box-shadow: inset 0 0 1px 1px #f6f6f6;
-				-ms-box-shadow: inset 0 0 1px 1px #f6f6f6;
-				-o-box-shadow: inset 0 0 1px 1px #f6f6f6;
-				box-shadow: inset 0 0 1px 1px #f6f6f6;
-				color: #333;
-				font: bold 12px "helvetica neue", helvetica, arial, sans-serif;
-				line-height: 1;
-				padding: 8px 0 9px;
-				text-align: center;
-				text-shadow: 0 1px 0 #fff;
-				width: 80px;
-			}
-			
-			button.minimal:hover {
-				background: #d9d9d9;
-				-webkit-box-shadow: inset 0 0 1px 1px #eaeaea;
-				-moz-box-shadow: inset 0 0 1px 1px #eaeaea;
-				-ms-box-shadow: inset 0 0 1px 1px #eaeaea;
-				-o-box-shadow: inset 0 0 1px 1px #eaeaea;
-				box-shadow: inset 0 0 1px 1px #eaeaea;
-				color: #222;
-				cursor: pointer;
-			}
-			
-			button.minimal:active {
-				background: #d0d0d0;
-				-webkit-box-shadow: inset 0 0 1px 1px #e3e3e3;
-				-moz-box-shadow: inset 0 0 1px 1px #e3e3e3;
-				-ms-box-shadow: inset 0 0 1px 1px #e3e3e3;
-				-o-box-shadow: inset 0 0 1px 1px #e3e3e3;
-				box-shadow: inset 0 0 1px 1px #e3e3e3;
-				color: #000;
-			}
-			
 			#main_container {
 				width:500px;
 			}
 			
-			#player_ui {
-				font-size:30px;
-				padding:20px;
-				background: transparent url(http://cont-sjl-1.pandora.com/images/public/amz/8/3/3/9/837101279338_500W_500H.jpg) no-repeat;
-				background-size: cover;
-				height:460px;
-				
+			#album_art_container {				
 				-webkit-box-shadow: 0px 0px 20px 0px rgba(0, 0, 0, 1);
 				-moz-box-shadow: 0px 0px 20px 0px rgba(0, 0, 0, 1);
 				box-shadow: 0px 0px 20px 0px rgba(0, 0, 0, 1);
 				position:relative;
+				width:500px;
+				height:500px;
+			}
+			#album_art {
+				width:500px;
+				height:500px;
 			}
 			
 			#overlay {
@@ -83,14 +38,21 @@
 			
 			html {
 				background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACEAAAAkCAMAAAAw96PuAAAAMFBMVEUbGxsaGhoiIiIcHBwVFRUYGBggICAeHh4WFhYfHx8XFxcUFBQdHR0ZGRkhISESEhKy7ZvJAAABQUlEQVR42l1TUZLFIAiDRQpS3Xf/2+6Ugjw2X6nTxMgEAPxJ0IAXzFeeCcKFCoHJ9pKbKI5wCNBUjE+S4dR4pkhRABbcEBDUV5cWW6ebG597FF9dYMBy80zofq4LsM1MWGGNXRcWizJhhaXbKuaWr4QJ28UfiwDveQUIsbjBGcta9AJYwCgwt7b7ckKiDP/yoZ4JsU5YNCqf0zYhWs+L7fyiHLqA+UtpjXi8+4XOgfG8Suh+bUJBM6H7gYGdCclJeGsAGaimJXm/8VUThAtGr0cWJGmrR5i0gkirh8AIXRWkFTj87kdXlY4CVz1S1yotbSFC1xNPhQQNphOzEq+vjmFxXZAw/K0t/OKW+foK9QWr+2qF2oLto6sJ9QUbVaxaoV4Pdp30FaJWj9RVpavATrfCx3U9seiuhQBGPZBTYC38AccDDZOEuQAKAAAAAElFTkSuQmCC);
+				height:100%;
+			}
+			body {
+				background:-webkit-gradient(radial, 50% 35%, 0, 50% 50%, 450, from(rgba(255,255,255,.4)), to(rgba(0,0,0,0)));
+				height:100%;
+				margin:0;
 			}
 			
 			#credits {
 				font-family: sans-serif;
 				font-size:10px;
 				color:white;
-				text-align:right;
-				padding-right:5px;
+				position:absolute;
+				bottom:20px;
+				right:20px;
 			}
 			
 			#credits a {
@@ -99,10 +61,65 @@
 			
 			#title {
 				font-family: sans-serif;
-				font-size:17px;
+				font-size:20px;
 				color:white;
-				padding-bottom:10px;
+				padding-bottom:15px;
 				text-shadow: 2px 2px 3px #000;
+			}
+			
+			.player_button {
+				background-color: rgba(0,0,0,.3);
+				color:white;
+				font-size:20px;
+				cursor:pointer;
+				border-radius:5px;
+				margin-bottom:10px;
+				text-align:center;
+				width:50px;
+				padding:10px 0;
+			}
+			.player_button:hover {
+				background-color: rgba(0,0,0,.6);
+			}
+			
+			
+			.ui-slider-vertical {
+				width:35px;
+			}
+			
+			.ui-widget-content {
+				border:0;
+				background-color:rgba(0,0,0,.3);
+				border-radius:5px;
+			}
+			
+			.ui-slider {
+				position:relative;
+				text-align:left;
+			}
+			
+			.ui-slider-vertical .ui-slider-range-min {
+				bottom:0;
+			}
+			
+			.ui-slider-vertical .ui-slider-range {
+				left:0;
+				width:100%;
+			}
+			
+			.ui-slider .ui-slider-range {
+				position: absolute;
+				z-index: 1;
+				font-size: .7em;
+				display: block;
+				border: 0;
+				background-position: 0 0;
+			}
+			
+			.ui-widget-header {
+				border:0;
+				background-color:rgba(0,0,0,.3);
+				font-weight: bold;
 			}
 		</style>
 	</head>
@@ -111,32 +128,32 @@
     	<div id="jquery_jplayer"></div>
 
 		<div id="main_container">
-			<div id="title"><span id="track-artist">Dubtek</span> - <span id="track-title">Rampant</span></div>
+			<div id="title"><span id="track-artist"></span> - <span id="track-title"></span></div>
 			
-			<div style="position:relative">
-				<div style=" position:absolute; right:-40px;">
-					<div id="slider-vertical" style="height:500px;"></div>
+			<div style="position:relative; height:500px;">				
+				<div id="slider-vertical" style="height:500px; position:absolute; left:-55px; bottom:0px;"></div>
+				<div style="position:absolute; right: -70px;">
+					<div id="like" class="player_button">&#9650;</div>
+					<div class="player_button">&#9660;</div>
+					<div id="next" class="player_button">&#9654;&#9654;</div>
 				</div>
 				
-		        <div id="player_ui">
-		        </div>
+		        <div id="album_art_container"><img id="album_art" src="" width="500px" height="500px" /></div>
 	        </div>
 	        
-	        <div id="footer" style="padding-top:10px;">
+	        <div id="footer" style="padding-top:15px;">
 		        <div style="float:left;">
 		        	<select>
 		        		<option>Amon Tobin Radio</option>
 		        		<option>Beatles Radio</option>
 		        	</select>
 		        </div>
-		        <div id="credits">
-		        	created by <a href="mailto:andrew.robert.moffat@gmail.com">Andrew Moffat</a>
-		        </div>
 	        </div>
         </div>
         
-        	        		<button class="minimal" id="like">like</button>
-	        		<button class="minimal" id="next">next</button>
+		<div id="credits">
+			created by <a href="mailto:andrew.robert.moffat@gmail.com">Andrew Moffat</a>
+		</div>
         
         <script type="text/javascript">
         
@@ -154,7 +171,7 @@
         	
         	function song_info() {
         		$.get("/current_song_info", function(data) {
-        			$("#player_ui").css("background-image", "url("+data.album_art+")");
+        			$("#album_art").attr("src", data.album_art);
         			$("#track-artist").text(data.artist);
         			$("#track-title").text(data.title);
         		})

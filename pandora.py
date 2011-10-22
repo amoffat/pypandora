@@ -368,13 +368,27 @@ class Song(object):
         self.station = station
 
         self.__dict__.update(kwargs)
+        #pprint(self.__dict__)
         
         self.seed = self.userSeed
         self.id = self.musicId
         self.title = self.songTitle
         self.album = self.albumTitle
         self.artist = self.artistSummary
-        self.album_art = self.artistArtUrl
+        
+        
+        # see if the big version of the album art exists
+        if self.artRadio:
+            art_url = self.artRadio.replace("130W_130H", "500W_500H")
+            art_url_parts = urlsplit(art_url)
+            
+            test_art = httplib.HTTPConnection(art_url_parts.netloc)
+            test_art.request("HEAD", art_url_parts.path)
+            if test_art.getresponse(True).status != 200: art_url = self.artRadio
+        else:
+            art_url = self.artistArtUrl
+        
+        self.album_art = art_url
 
 
         self.purchase_itunes =  kwargs.get("itunesUrl", "")
