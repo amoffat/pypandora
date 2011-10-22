@@ -2,7 +2,10 @@
 <html>
 	<head>
 		<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
+		<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js"></script>
 		<script type="text/javascript" src="http://jplayer.org/latest/js/jquery.jplayer.min.js"></script>
+		
+		<link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/redmond/jquery-ui.css" type="text/css" media="all" />
 		
 		<style type="text/css">
 			button.minimal {
@@ -110,7 +113,13 @@
 		<div id="main_container">
 			<div id="title"><span id="track-artist">Dubtek</span> - <span id="track-title">Rampant</span></div>
 			
-	        <div id="player_ui">
+			<div style="position:relative">
+				<div style=" position:absolute; right:-40px;">
+					<div id="slider-vertical" style="height:500px;"></div>
+				</div>
+				
+		        <div id="player_ui">
+		        </div>
 	        </div>
 	        
 	        <div id="footer" style="padding-top:10px;">
@@ -180,6 +189,21 @@
         		});
         		
         		$("#like").click(song_info);
+        		
+        		
+        		
+        		$("#slider-vertical").slider({
+        			orientation: "vertical",
+        			range: "min",
+        			min: 0,
+        			max: 100,
+        			value: 60,
+        			animate: true,
+        			slide: function(event, ui) {
+        				$("#jquery_jplayer").jPlayer("volume", ui.value / 100);
+        			}
+        		});
+        		$("#amount").val($("#slider-vertical").slider("value"));
         	});
         </script>
         
