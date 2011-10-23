@@ -1,5 +1,5 @@
 import time
-from xml.etree import cElementTree
+from xml.etree import ElementTree
 import xml.dom.minidom
 from xml.sax.saxutils import escape as xml_escape
 from string import Template
@@ -32,16 +32,39 @@ except ImportError: from cgi import parse_qsl, parse_qs
 THIS_DIR = dirname(abspath(__file__))
 TEMPLATE_DIR = join(THIS_DIR, "templates")
 
-music_buffer_size = 30
+music_buffer_size = 10
 
 
 
 
-
+# settings
 settings = {
     "download_music": False,
     "download_directory": "/tmp",
+    "last_station": None,
 }
+
+
+def save_setting(key, value):
+    global settings
+    
+    with open(abspath(__file__), "r") as h: lines = h.readlines()
+    start = lines.index("# settings\n")
+    end = lines[start:].index("}\n") + start + 1
+    
+    settings[key] = value
+    print repr(settings)
+    #eval(settings)
+    #print settings
+    #m = re.search("^settings = \{(.+?)\}$", py, re.M | re.S)
+    #print m.groups()
+    
+save_setting(0, 0)
+exit()
+
+
+
+
 
 
 
@@ -69,7 +92,7 @@ class Connection(object):
     @staticmethod
     def dump_xml(x):
         """ a convenience function for dumping xml from Pandora's servers """
-        #el = xml.dom.minidom.parseString(cElementTree.tostring(x))
+        #el = xml.dom.minidom.parseString(ElementTree.tostring(x))
         el = xml.dom.minidom.parseString(x)
         return el.toprettyxml(indent="  ")
 
@@ -125,7 +148,7 @@ class Connection(object):
 
         conn.close()
 
-        xml = cElementTree.fromstring(ret_data)
+        xml = ElementTree.fromstring(ret_data)
         return xml
 
 
@@ -243,6 +266,7 @@ class Account(object):
     def json_data(self):
         data = {}
         data["stations"] = [(id, station.name) for id,station in self.stations.iteritems()]
+        data["current_station"] = getattr(self.current_station, "id", None)
         return data
             
 
@@ -1076,7 +1100,9 @@ class MagicSocket(socket.socket):
             try: data = recv(buf)
             except socket.error, err:
                 if err.errno is errno.EWOULDBLOCK: yield None
-                else: yield False
+                else:
+                    print "derp", sys.exc_info()
+                    yield False
             else:
                 if not data: yield False
                 if break_after_read: yield data
@@ -1146,11 +1172,15 @@ class WebConnection(object):
             to_write.remove(self)
             to_err.remove(self)
            
-        elif self.path == "/control":
-            player_cmd = self.params.get("player")
-            if player_cmd == "next":
+        elif self.path.startswith("/control/"):
+            command = self.path.replace("/control/", "")
+            if command == "next":
                 shared_data["music_buffers"][0] = Queue(music_buffer_size)
                 self.pandora_account.next()
+                
+            elif command == "change_station":
+                station_id = self.params["station_id"];
+                self.pandora_account.stations[station_id].play()
             
             self.send_json({"status": True})
             self.close()

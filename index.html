@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
 	<head>
+		<title>PyPandora</title>
+		<link id="favicon" href="#" rel="shortcut icon" />
 		<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
 		<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js"></script>
 		<script type="text/javascript" src="http://jplayer.org/latest/js/jquery.jplayer.min.js"></script>
@@ -41,9 +43,10 @@
 				height:100%;
 			}
 			body {
-				background:-webkit-gradient(radial, 50% 30%, 0, 50% 50%, 450, from(rgba(255,255,255,.4)), to(rgba(0,0,0,0)));
+				background:-webkit-gradient(radial, 49% 30%, 0, 49% 50%, 450, from(rgba(255,255,255,.4)), to(rgba(0,0,0,0)));
 				height:100%;
 				margin:0;
+				font-family: sans-serif;
 			}
 			
 			#credits {
@@ -60,11 +63,18 @@
 			}
 			
 			#title {
-				font-family: sans-serif;
 				font-size:20px;
 				color:white;
 				padding-bottom:15px;
 				text-shadow: 2px 2px 3px #000;
+				font-variant:small-caps;
+			}
+			
+			#footer {
+				font-size:16px;
+				color:white;
+				text-shadow: 2px 2px 3px #000;
+				font-variant:small-caps;
 			}
 			
 			.player_button {
@@ -131,6 +141,13 @@
 			.purchase_link {
 				text-decoration:none;
 			}
+			
+			.album_art {
+				width:500px;
+				height:500px;
+				background-color:rgba(0,0,0,.5);
+				position:absolute;
+			}
 		</style>
 	</head>
 	
@@ -138,16 +155,17 @@
     	<div id="jquery_jplayer"></div>
 
 		<div id="main_container">
-			<div id="title"><span id="track-artist"></span> - <span id="track-title"></span>
+			<div id="title">
+				<span id="track-title"></span> - <span id="track-artist"></span>
 			
-				<div style="float:right;">
+				<span style="padding-left:10px;">
 					<a class="purchase_link" id="purchase_itunes" title="purchase on itunes" target="_blank" href="#">
 						<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABhUlEQVQ4jZWTP6vqQBDFf5td4SZdRGxsRKwsVbC20O/ox/AjWEZsRLRRUEQiKPin0bDZTV7lvhe818ubbmfnHM6cmRGj0Sjnl0jTFCEESqm3P+8TMM9zsiyj1WpRr9cxxvwfgbWWbrdLv98nDEOyLHuredNkrcUYg7WWcrlMu90mjmPm87lTJYT4nsAYQxiGNBoNAC6XC8vlkjRN6XQ6XK9XdrtdgUT9C67VagwGA4IgcDmttXsDTKdTZrOZM1S9ZCml6PV6hWKlVMH5x+PBfr/H8/5a570IgiCgUql88pTVasXxeHwnAArJn0JrTZ4X18ahXs5/imazie/7hXF6AEIIns8np9PpI0G1WmU4HCKldEocgTGG9Xr9axtfX1+FNlwLSik2mw1xHP8IzrKMKIowxrg9cARCCKy1TCYTzuczWmu22y2LxYL7/Y7WmiiKOBwOhdEWNlFKye12Yzweo5QiSRKstfi+j+d5JEmClLKg6u0WpJTuHoQQlEol0jQlz/NvR/0HgUTC+duFiXUAAAAASUVORK5CYII=" />
 					</a>
 					<a class="purchase_link" id="purchase_amazon" title="purchase on amazon" target="_blank" href="#">
 						<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAByklEQVQ4jY2TP2hTURjFf09zM9UQcGmID9xEFEyyCTq1b6uLxuCS1e5Fgotu4mBdzAOnLA7BpU0HR6Gb/3hTEEwyGBzynjWgvjyl0IDH4aVpmryKB+5wv8t3vnPuuRdJaUlPJQ30/xhMetKWpMfAfWbQ6/VoNBp87vexLIsba2tUq1USsImkYJba8zydNkapuVWr1ZKUBEgKZyt319eVMkarjqNOpzPdn7PtJILQkhQCmUNNQRDg+z5hGDKKIprNJq1WC4DxwcG8hdGCgm63q0KptGAhZUyiggWC25WKUsaoUCrJ933VXfefBKfmNR3KLZfL5HI52u329CyKosUc5hUUisXpxFXHOZZI3XVPsPDbn1Y8z1PetpUyRnnbVt11Va5UtOI4ir4H+tN5IX3YiNc0hVeXMlzbhuyFpMdyhN1bsHQe0ln49BDuaJLC4LX0Eun9hhT58zKP8Gsg9bekHx1p6+zcO/jSgnc340nZ67DsgMmAAMuCvV3Y24Gr23F9+AauPBhZkgJgGYChBx8fwbeduJFJP8DSRSg+g/wqjCdpmDNfLUlPgHvHvP7swvAtjMOYIXsZ8itJt7KJ4u/8XNL+yeYXsD/pSf8FnD4v3ctAsWIAAAAASUVORK5CYII=" />
 					</a>
-				</div>
+				</span>
 			</div>
 			
 			<div style="position:relative; height:500px;">				
@@ -158,12 +176,15 @@
 					<div id="next" class="player_button">&#9654;&#9654;</div>
 				</div>
 				
-		        <div id="album_art_container"><img id="album_art" src="" width="500px" height="500px" /></div>
+		        <div id="album_art_container">
+		        	<div class="album_art" id="current_album_art" style="z-index:20;"></div>
+		        	<img id="next_album_art" src="" width="500px" height="500px" style="z-index:10;"/>
+		        </div>
 	        </div>
 	        
 	        <div id="footer" style="padding-top:15px;">
 		        <div style="float:left;">
-		        	<select id="stations"></select>
+		        	Stations <select id="stations" style="margin-left:20px;"></select>
 		        </div>
 	        </div>
         </div>
@@ -175,6 +196,7 @@
         <script type="text/javascript">
         
         	var lp_cursor = "";
+        	var current_song = null;
         
         	function long_poll() {
         		$.get("/events", {cursor: lp_cursor}, function(data) {
@@ -182,22 +204,38 @@
         		});
         	}
         
-        	function control(data, success) {
-        		$.get("/control", data, success);
+        	function control(method, data, success) {
+        		$.get("/control/" + method, data, success);
         	}
         	
         	function song_info() {
         		$.get("/current_song_info", function(data) {
+        			console.log(data);
+        			
+        			current_song = data.id;
+        			
         			if (data.purchase_amazon) {$("#purchase_amazon").attr("href", data.purchase_amazon).show();}
         			else {$("#purchase_amazon").hide();}
         			
         			if (data.purchase_amazon) {$("#purchase_itunes").attr("href", data.purchase_itunes).show();}
         			else {$("#purchase_itunes").hide();}
         			
-        			$("#album_art").attr("src", data.album_art);
+        			$("#current_album_art").css("background-image", "url("+data.album_art+")");
         			$("#track-artist").text(data.artist);
-        			$("#track-title").text(data.title);
+        			$("#track-title").text(data.title);        	
+        			
+        			var title = data.title + " by " + data.artist;
+        			$("head title").text(title);
         		})
+        	}
+        	
+        	function restart_music() {
+        		$("#jquery_jplayer").jPlayer("clearMedia").jPlayer("setMedia", {mp3:"/m"}).jPlayer("play");
+        	}
+        	
+        	function change_station(id) {
+        		control("change_station", {"station_id": id});
+        		restart_music();
         	}
         	
         	function account_info() {
@@ -214,6 +252,8 @@
         				name = data.stations[i][1];
         				select.append($("<option>"+name+"</option>").val(id));
         			}
+        			
+        			select.val(data.current_station);
         		});
         	}
         	
@@ -241,12 +281,15 @@
 
         		
         		$("#next").click(function() {
-        			control({"player": "next"})
-        			$("#jquery_jplayer").jPlayer("clearMedia").jPlayer("setMedia", {mp3:"/m"}).jPlayer("play");
+        			control("next_song");
+        			restart_music();
         		});
         		
         		$("#like").click(song_info);
         		
+        		$("#stations").click(function() {
+        			change_station($(this).val());
+        		})
         		
         		
         		$("#slider-vertical").slider({
