@@ -41,7 +41,7 @@ music_buffer_size = 10
 settings = {
     'download_music': False,
     'download_directory': '/tmp',
-    'last_station': '437650750881091451',
+    'last_station': '443056761792057211',
 }
 
 
@@ -276,9 +276,8 @@ class Account(object):
 
     @property
     def stations(self):
-        """ a private getter that puts the stations, sorted alphabetically,
-        into the self.stations attribute dictionary """
-
+        if self._stations: return self._stations
+        
         get = {"method": "getStations", "lid": self.connection.lid}
         body = self.connection.get_template("get_stations", {
             "timestamp": int(time.time() - self.connection.timeoffset),
@@ -457,6 +456,7 @@ class Song(object):
     @property
     def json_data(self):
         return {
+            "id": self.id,
             "album_art": self.album_art,
             "title": self.title,
             "album": self.album,
@@ -599,21 +599,23 @@ class Song(object):
             
             
             
-        mp3_data = "".join(mp3_data)
-        
-        # tag the mp3
-        tag = ID3Tag()
-        tag.add_id(self.id)
-        tag.add_title(self.title)
-        tag.add_album(self.album)
-        tag.add_artist(self.artist)
-        # can't get this working...
-        #tag.add_image(self.album_art)
-
-        # and write it to the file
-        h = open(self.filename, "w")
-        h.write(tag.binary() + mp3_data)
-        h.close()
+        if settings["download_music"]:
+            mp3_data = "".join(mp3_data)
+            
+            # tag the mp3
+            tag = ID3Tag()
+            tag.add_id(self.id)
+            tag.add_title(self.title)
+            tag.add_album(self.album)
+            tag.add_artist(self.artist)
+            # can't get this working...
+            #tag.add_image(self.album_art)
+    
+            # and write it to the file
+            h = open(self.filename, "w")
+            h.write(tag.binary() + mp3_data)
+            h.close()
+            
         
         self.station.next()
         
@@ -1176,9 +1178,9 @@ class WebConnection(object):
             to_write.remove(self)
             to_err.remove(self)
            
-        elif self.path.startswith("/control/"):
+        elif self.path.startswith("/control/"):            
             command = self.path.replace("/control/", "")
-            if command == "next":
+            if command == "next_song":
                 shared_data["music_buffers"][0] = Queue(music_buffer_size)
                 self.pandora_account.next()
                 
@@ -1331,7 +1333,6 @@ class PlayerServer(object):
                 self.to_read,
                 self.to_write,
                 self.to_err,
-                0
             )
             
             for sock in read:
