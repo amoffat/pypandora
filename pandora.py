@@ -48,18 +48,25 @@ settings = {
 def save_setting(key, value):
     global settings
     
-    with open(abspath(__file__), "r") as h: lines = h.readlines()
-    start = lines.index("# settings\n")
-    end = lines[start:].index("}\n") + start + 1
+    with open(abspath(__file__), "r") as h: lines = h.read()
+    
+    
+    start = lines.index("settings = {\n")
+    end = lines[start:].index("}\n") + start + 2
+    
+    chunks = [lines[:start], "", lines[end:]]
     
     settings[key] = value
-    print repr(settings)
-    #eval(settings)
-    #print settings
-    #m = re.search("^settings = \{(.+?)\}$", py, re.M | re.S)
-    #print m.groups()
+    new_settings = "settings = {\n"
+    for k,v in settings.iteritems(): new_settings += "    %r: %r,\n" % (k, v)
+    new_settings += "}\n"
     
-save_setting(0, 0)
+    chunks[1] = new_settings
+    
+    with open(abspath(__file__), "r") as h:
+        pass
+    
+save_setting("herp", "derp")
 exit()
 
 
