@@ -163,10 +163,7 @@
 	        
 	        <div id="footer" style="padding-top:15px;">
 		        <div style="float:left;">
-		        	<select>
-		        		<option>Amon Tobin Radio</option>
-		        		<option>Beatles Radio</option>
-		        	</select>
+		        	<select id="stations"></select>
 		        </div>
 	        </div>
         </div>
@@ -201,6 +198,23 @@
         			$("#track-artist").text(data.artist);
         			$("#track-title").text(data.title);
         		})
+        	}
+        	
+        	function account_info() {
+        		$.get("/account_info", function(data) {
+        			console.log(data);
+        			
+        			
+        			var select = $("#stations");
+        			var id,name,option;
+        			
+        			select.find('option').remove();
+        			for (var i=0; i<data.stations.length; i++) {
+        				id = data.stations[i][0];
+        				name = data.stations[i][1];
+        				select.append($("<option>"+name+"</option>").val(id));
+        			}
+        		});
         	}
         	
         	$(function() {      
@@ -247,6 +261,8 @@
         			}
         		});
         		$("#amount").val($("#slider-vertical").slider("value"));
+        		
+        		account_info();
         	});
         </script>
         

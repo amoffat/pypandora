@@ -238,6 +238,13 @@ class Account(object):
                 break
             else: time.sleep(1)
         if not logged_in: raise Exception, "can't log in"
+        
+    @property
+    def json_data(self):
+        data = {}
+        data["stations"] = [(id, station.name) for id,station in self.stations.iteritems()]
+        return data
+            
 
     @property
     def stations(self):
@@ -1123,6 +1130,12 @@ class WebConnection(object):
         # long-polling requests
         elif self.path == "/messages":
             self.params
+            self.close()
+            to_write.remove(self)
+            to_err.remove(self)
+            
+        elif self.path == "/account_info":
+            self.send_json(self.pandora_account.json_data)
             self.close()
             to_write.remove(self)
             to_err.remove(self)
