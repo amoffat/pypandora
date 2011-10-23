@@ -22,7 +22,7 @@ import sys
 import json
 from Queue import Queue
 from base64 import b64decode
-
+from random import choice
 
 try: from urlparse import parse_qsl, parse_qs
 except ImportError: from cgi import parse_qsl, parse_qs
@@ -39,13 +39,19 @@ music_buffer_size = 10
 
 # settings
 settings = {
-    "download_music": False,
-    "download_directory": "/tmp",
-    "last_station": None,
+    'download_music': False,
+    'download_directory': '/tmp',
+    'last_station': '437650750881091451',
 }
 
 
+
+
 def save_setting(key, value):
+    """ saves a value persisitently *in the file itself* so that it can be
+    used next time pypandora is fired up.  of course there are better ways
+    of storing values persistently, but i want to stick with the '1 file'
+    idea """
     global settings
     
     with open(abspath(__file__), "r") as h: lines = h.read()
@@ -62,18 +68,9 @@ def save_setting(key, value):
     new_settings += "}\n"
     
     chunks[1] = new_settings
+    new_contents = "".join(chunks)
     
-    with open(abspath(__file__), "r") as h:
-        pass
-    
-save_setting("herp", "derp")
-exit()
-
-
-
-
-
-
+    with open(abspath(__file__), "w") as h: h.write(new_contents)
 
 
 
@@ -1187,7 +1184,9 @@ class WebConnection(object):
                 
             elif command == "change_station":
                 station_id = self.params["station_id"];
-                self.pandora_account.stations[station_id].play()
+                station = self.pandora_account.stations[station_id]
+                save_setting("last_station", station.id)
+                station.play()
             
             self.send_json({"status": True})
             self.close()
@@ -1293,10 +1292,15 @@ class PlayerServer(object):
     def __init__(self, pandora_account):
         self.pandora_account = pandora_account
         
-        # play a random station
-        from random import choice
-        random_station = choice(pandora_account.stations.values())
-        random_station.play()
+        
+        # load our previously-saved station
+        station = None
+        last_station = settings.get("last_station", None)
+        if last_station: station = pandora_account.stations.get(last_station, None)
+        
+        # ...or play a random one
+        if not station: station = choice(pandora_account.stations.values())
+        station.play()
         
         self.to_read = set([self.pandora_account])
         self.to_write = set()
