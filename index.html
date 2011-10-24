@@ -26,7 +26,7 @@
 			}
 			
 			#overlay {
-				background-color:rgba(0,0,0,.8);
+				background-color:rgba(0,0,0,.9);
 				display:none;
 				text-align:center;
 				position:absolute;
@@ -34,12 +34,14 @@
 				right:0;
 				color:white;
 				width:200px;
-				padding:10px 20px;
+				height:100px;
+				line-height:100px;
 				font-size:14px;
 				z-index:30;
 				-webkit-box-shadow: 0px 0px 20px 0px rgba(0, 0, 0, 1);
 				-moz-box-shadow: 0px 0px 20px 0px rgba(0, 0, 0, 1);
 				box-shadow: 0px 0px 20px 0px rgba(0, 0, 0, 1);
+				font-family:monospace;
 			}
 			
 			html {
@@ -71,7 +73,6 @@
 				color:white;
 				padding-bottom:15px;
 				text-shadow: 2px 2px 3px #000;
-				font-variant:small-caps;
 			}
 			
 			#footer {
@@ -190,7 +191,7 @@
 				</div>
 				
 		        <div id="album_art_container">
-		        	<div id="overlay">Buffering...</div>
+		        	<div id="overlay"></div>
 		        	<div class="album_art" id="current_album_art" style="z-index:20;"></div>
 		        	<div class="album_art" id="next_album_art" style="z-index:10;"></div>
 		        </div>
@@ -212,6 +213,7 @@
         	var lp_cursor = "";
         	var current_song = null;
         	var current_station = null;
+        	var overlay_interval = null;
         
         	function long_poll() {
         		$.get("/events", {cursor: lp_cursor}, function(data) {
@@ -269,23 +271,38 @@
         	}
         	
         	function change_station(id) {
-        		overlay_show("Changing station...");
+        		overlay_show("Changing station");
         		control("change_station", {"station_id": id});
         		current_station = id;
         		restart_music();
         	}
         	
         	function change_song() {
-       			overlay_show("Changing song...");
+       			overlay_show("Changing song");
        			control("next_song");
        			restart_music();        		
         	}
         	
+        	
+        	function update_overlay() {
+        		var spin = "|/-\\";
+        		var text = $("#overlay").text();
+        		var cur_spin_pos = text.lastIndexOf(" ") + 1;
+        		
+        		var cur_spin = text[cur_spin_pos];
+        		var next_spin = spin[spin.indexOf(cur_spin)+1];
+        		if (typeof(next_spin) == "undefined") {next_spin = spin[0];}
+        		//console.log(cur_spin, next_spin);
+        		text = text.replace(cur_spin, next_spin);
+        		$("#overlay").text(text);
+        	}
         	function overlay_show(msg) {
-        		$("#overlay").text(msg).fadeIn("fast");
+        		$("#overlay").text(msg + " |").fadeIn("fast");
+        		overlay_interval = setInterval(update_overlay, 100);
         	}
         	function overlay_hide() {
         		$("#overlay").fadeOut("fast");
+        		clearInterval(overlay_interval);
         	}
         	
         	function set_volume(level, set_slider) {
@@ -336,14 +353,18 @@
         			ready: function () {
         				$(this).jPlayer("setMedia", {mp3:"/m"}).jPlayer("play");
         			},
-        			canplay: function() {
-        				overlay_hide();
-        				song_info();
-        			},
         			preload: "none",
         			swfPath: "http://jplayer.org/latest/js/",
         			supplied: "mp3",
         			wmode: "window"
+        		});
+        		
+        		
+        		var load_trigger = $.jPlayer.event.canplay;
+        		if ($.browser.msie || $.browser.opera) {load_trigger = $.jPlayer.event.loadstart;}        		
+        		$("#jquery_jplayer").bind(load_trigger, function() {
+    				overlay_hide();
+    				song_info();
         		});
 
         		
@@ -373,7 +394,7 @@
         		});
         		
         		account_info();
-        		overlay_show("Buffering...")
+        		overlay_show("Buffering")
         	});
         </script>
         

@@ -19,7 +19,8 @@ from pprint import pprint
 import select
 import errno
 import sys
-import json
+try: import simplejson as json
+except ImportError: import json
 from Queue import Queue
 from base64 import b64decode, b64encode
 import zlib
@@ -45,7 +46,7 @@ music_buffer_size = 10
 
 # settings
 settings = {
-    'volume': '73',
+    'volume': '87',
     'download_music': False,
     'download_directory': '/tmp',
     'last_station': '517956713646870395',
@@ -279,6 +280,7 @@ class Account(object):
     def json_data(self):
         data = {}
         data["stations"] = [(id, station.name) for id,station in self.stations.iteritems()]
+        data["stations"].sort(key=lambda s: s[1].lower())
         data["current_station"] = getattr(self.current_station, "id", None)
         data["volume"] = settings["volume"]
         return data
@@ -1406,14 +1408,13 @@ class PlayerServer(object):
 
 
 
-
-
-logging.basicConfig(
-    format="(%(process)d) %(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
-
 if __name__ == "__main__":
+    logging.basicConfig(
+        format="(%(process)d) %(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        level=logging.INFO
+    )
+
+
     parser = OptionParser(usage=("%prog [options]"))
     parser.add_option('-u', "--username", dest="user", help="your Pandora username (your email)")
     parser.add_option('-p', '--password', dest='password', help='your Pandora password')
