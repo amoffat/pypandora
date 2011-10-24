@@ -21,11 +21,17 @@ import errno
 import sys
 import json
 from Queue import Queue
-from base64 import b64decode
+from base64 import b64decode, b64encode
+import zlib
 from random import choice
+from webbrowser import open as webopen
 
 try: from urlparse import parse_qsl, parse_qs
 except ImportError: from cgi import parse_qsl, parse_qs
+
+
+
+
 
 
 
@@ -39,9 +45,10 @@ music_buffer_size = 10
 
 # settings
 settings = {
+    'volume': '73',
     'download_music': False,
     'download_directory': '/tmp',
-    'last_station': '443056761792057211',
+    'last_station': '517956713646870395',
 }
 
 
@@ -54,6 +61,7 @@ def save_setting(key, value):
     idea """
     global settings
     
+    logging.info("saving value %r to %r", value, key)
     with open(abspath(__file__), "r") as h: lines = h.read()
     
     
@@ -91,7 +99,7 @@ class Connection(object):
         self.timeoffset = time.time()
         self.token = None
         self.lid = None # listener id
-        
+        self.log = logging.getLogger("pandora")
 
     @staticmethod
     def dump_xml(x):
@@ -99,6 +107,7 @@ class Connection(object):
         #el = xml.dom.minidom.parseString(ElementTree.tostring(x))
         el = xml.dom.minidom.parseString(x)
         return el.toprettyxml(indent="  ")
+
 
     def send(self, get_data, body=None):        
         conn = httplib.HTTPConnection("%s:%d" % (self._pandora_host, self._pandora_port))
@@ -130,7 +139,7 @@ class Connection(object):
 
         url = "%s?%s" % (self._pandora_rpc_path, urllib.urlencode(ordered))
 
-        logging.debug("talking to pandora %s" % url)
+        self.log.debug("talking to %s", url)
 
         # debug logging?
         if self.debug:
@@ -172,6 +181,8 @@ class Connection(object):
         """ synchronizes the times between our clock and pandora's servers by
         recording the timeoffset value, so that for every call made to Pandora,
         we can specify the correct time of their servers in our call """
+        
+        self.log.info("syncing time")
         get = {"method": "sync"}
         body = self.get_template("sync")
         timestamp = None
@@ -194,11 +205,10 @@ class Connection(object):
     def authenticate(self, email, password):
         """ logs us into Pandora.  tries a few times, then fails if it doesn't
         get a listener id """
-        logging.info("authenticating with %s" % email)
+        self.log.info("logging in with %s...", email)
         get = {"method": "authenticateListener"}
 
 
-        logging.info("trying to authenticate with pandora...")
         body = self.get_template("authenticate", {
             "timestamp": int(time.time() - self.timeoffset),
             "email": xml_escape(email),
@@ -222,15 +232,13 @@ class Connection(object):
 
 
 class Account(object):
-    def __init__(self, email, password, mp3_cache_dir=None, debug=False):
+    def __init__(self, email, password, debug=False):
+        self.log = logging.getLogger("account %s" % email)
         self.connection = Connection(debug)        
         self.email = email
         self.password = password
         self._stations = {}
         self.recently_played = []
-
-        if not mp3_cache_dir: mp3_cache_dir = gettempdir()
-        self.cache_dir = mp3_cache_dir
 
         self.current_station = None
         
@@ -265,12 +273,14 @@ class Account(object):
                 break
             else: time.sleep(1)
         if not logged_in: raise Exception, "can't log in"
+        self.log.info("logged in")
         
     @property
     def json_data(self):
         data = {}
         data["stations"] = [(id, station.name) for id,station in self.stations.iteritems()]
         data["current_station"] = getattr(self.current_station, "id", None)
+        data["volume"] = settings["volume"]
         return data
             
 
@@ -278,6 +288,7 @@ class Account(object):
     def stations(self):
         if self._stations: return self._stations
         
+        self.log.info("fetching stations")
         get = {"method": "getStations", "lid": self.connection.lid}
         body = self.connection.get_template("get_stations", {
             "timestamp": int(time.time() - self.connection.timeoffset),
@@ -306,13 +317,14 @@ class Account(object):
         for id, station in fresh_stations.iteritems():
             self._stations.setdefault(id, station)
 
+        self.log.info("got %d stations", len(self._stations))
         return self._stations
 
 
 
 
 class Station(object):    
-    PLAYLIST_LENGTH = 5
+    PLAYLIST_LENGTH = 3
 
     def __init__(self, account, stationId, stationIdToken, stationName, **kwargs):
         self.account = account
@@ -321,19 +333,28 @@ class Station(object):
         self.name = stationName
         self.current_song = None
         self._playlist = []
+        
+        self.log = logging.getLogger(repr(self))
 
-    def like(self): self.current_song.like()
+    def like(self):
+        # normally we might do some logging here, but we let the song object
+        # handle it
+        self.current_song.like()
 
     def dislike(self):
         self.current_song.dislike()
         self.next()
     
     def play(self):
+        if self.account.current_station and self.account.current_station is not self:
+            self.log.info("changing station to %r", self)
+            
         self.account.current_station = self
         
         self.playlist.reverse()
         if self.current_song: self.account.recently_played.append(self.current_song)
         self.current_song = self.playlist.pop()
+        self.log.info("playing %r", self.current_song)
         self.playlist.reverse()
         self.current_song.play()
             
@@ -349,6 +370,7 @@ class Station(object):
 
         if len(self._playlist) >= Station.PLAYLIST_LENGTH: return self._playlist
 
+        self.log.info("getting playlist")
         format = "mp3-hifi" # always try to select highest quality sound
         get = {
             "method": "getFragment", "lid": self.account.connection.lid,
@@ -379,7 +401,7 @@ class Station(object):
                 got_playlist = True
                 break
             else:
-                logging.error("failed to get playlist, trying %d more times" % get_playlist_tries)
+                self.log.error("failed to get playlist, trying %d more times" % get_playlist_tries)
                 self.account.login()
 
         if not got_playlist: raise Exception, "can't get playlist!"
@@ -448,10 +470,13 @@ class Song(object):
             part = re.sub("_+", "_", part)
             return part
 
-        self.filename = join(self.station.account.cache_dir, "%s-%s.mp3" % (format_title(self.artist), format_title(self.title)))
+        self.filename = join(settings["download_directory"], "%s-%s.mp3" % (format_title(self.artist), format_title(self.title)))
 
         self._stream_gen = None
         self.sock = socket.socket()
+        
+        self.log = logging.getLogger(repr(self))
+        
         
     @property
     def json_data(self):
@@ -511,8 +536,7 @@ class Song(object):
     def _stream(self):
         """ a generator which streams some music """
 
-        logging.info("downloading %s" % self.filename)
-        
+        self.log.info("downloading")        
 
         # figure out how fast we should download and how long we need to sleep
         # in between reads.  we have to do this so as to not stream to quickly
@@ -540,23 +564,24 @@ class Song(object):
             sock = MagicSocket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect((host, 80))
             sock.send(req % (path, host, self.download_progress))
-            return sock
+            
+            # we wait until after we have the headers to switch to non-blocking
+            # just because it's easier that way.  in the worst case scenario,
+            # pandora's servers hang serving up the headers, causing our app to hang
+            headers = sock.read_until("\r\n\r\n", include_last=True)
+            headers = headers.strip().split("\r\n")
+            headers = dict([h.split(": ") for h in headers[1:]])
+            sock.setblocking(0)
+            return sock, headers
         
-        self.sock = reconnect()        
-        
-        # we wait until after we have the headers to switch to non-blocking
-        # just because it's easier that way.  in the worst case scenario,
-        # pandora's servers hang serving up the headers, causing our app to hang
-        headers = self.sock.read_until("\r\n\r\n", include_last=True)
-        headers = headers.strip().split("\r\n")
-        headers = dict([h.split(": ") for h in headers[1:]])
-        self.sock.setblocking(0)
+        self.sock, headers = reconnect()
         yield None
         
         # determine the size of the song, and from that, how long the song is
         # in seconds
         self.song_size = int(headers["Content-Length"])
         self.duration = self.song_size / bytes_per_second
+        read_amt = self.song_size
 
 
         mp3_data = []
@@ -576,7 +601,7 @@ class Song(object):
             # read until the end of the song, but take a break after each read
             # so we can do other stuff
             last_read = now
-            chunk = self.sock.read_until(self.song_size, break_after_read=True, buf=Song.read_chunk_size)
+            chunk = self.sock.read_until(read_amt, break_after_read=True, buf=Song.read_chunk_size)
             
             # got data?  aggregate it and return it
             if chunk:
@@ -588,8 +613,10 @@ class Song(object):
             # and the song is done?
             elif chunk is False:
                 if not self.done:
-                    logging.info("reconnecting at byte %d of %d" % (self.download_progress, self.song_size))
-                    self.sock = reconnect()
+                    self.log.error("disconnected, reconnecting at byte %d of %d", self.download_progress, self.song_size)
+                    self.sock, headers = reconnect()
+                    read_amt = int(headers["Content-Length"])
+                    continue
                 # done!
                 else: break
                 
@@ -600,6 +627,7 @@ class Song(object):
             
             
         if settings["download_music"]:
+            self.log.info("saving file to %s", self.filename)
             mp3_data = "".join(mp3_data)
             
             # tag the mp3
@@ -648,19 +676,13 @@ class Song(object):
         xml = conn.send(get, body)
 
     def like(self):
-        logging.info("liking %s" % self)
+        self.log.info("liking")
         self._add_feedback(like=True)
 
     def dislike(self, **kwargs):
-        _pandora.stop()
-        logging.info("disliking %s" % self)
+        self.log.info("disliking")
         self._add_feedback(like=False)
         return self.station.next(**kwargs)
-
-    def __str__(self):
-        minutes = int(math.floor(float(self.length) / 60))
-        seconds = int(self.length - (minutes * 60))
-        return "\"%s\" by %s (%d:%02d) (%+.2f)" % (self.title, self.artist, minutes, seconds, self.gain)
 
     def __repr__(self):
         return "<Song \"%s\" by \"%s\">" % (self.title, self.artist)
@@ -860,7 +882,7 @@ def decrypt(input):
 
 
 
-
+# pandora encryption/decryption keys
 out_key_p = [
     0xD8A1A847, 0xBCDA04F4, 0x54684D7B, 0xCDFD2D53, 0xADAD96BA, 0x83F7C7D2,
     0x97A48912, 0xA9D594AD, 0x6B4F3733, 0x0657C13E, 0xFCAE0687, 0x700858E4,
@@ -1024,6 +1046,13 @@ in_key_s = [in_key_s[i:i+256] for i in xrange(0, len(in_key_s), 256)]
 
 
 
+
+
+
+
+
+
+
 class MagicSocket(socket.socket):
     """ this is a socket subclass that simplifies reading until a specific
     delimeter (for example, end of http headers) and reading until a specific
@@ -1107,7 +1136,6 @@ class MagicSocket(socket.socket):
             except socket.error, err:
                 if err.errno is errno.EWOULDBLOCK: yield None
                 else:
-                    print "derp", sys.exc_info()
                     yield False
             else:
                 if not data: yield False
@@ -1189,6 +1217,10 @@ class WebConnection(object):
                 station = self.pandora_account.stations[station_id]
                 save_setting("last_station", station.id)
                 station.play()
+                
+            elif command == "volume":
+                level = self.params["level"]
+                save_setting("volume", level)
             
             self.send_json({"status": True})
             self.close()
@@ -1310,10 +1342,10 @@ class PlayerServer(object):
         self.callbacks = []
         
 
-    def serve(self):
+    def serve(self, port=7000):
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind(('', 7000))
+        server.bind(('', port))
         server.listen(100)
         server.setblocking(0)
         
@@ -1333,6 +1365,7 @@ class PlayerServer(object):
                 self.to_read,
                 self.to_write,
                 self.to_err,
+                0
             )
             
             for sock in read:
@@ -1384,8 +1417,36 @@ if __name__ == "__main__":
     parser = OptionParser(usage=("%prog [options]"))
     parser.add_option('-u', "--username", dest="user", help="your Pandora username (your email)")
     parser.add_option('-p', '--password', dest='password', help='your Pandora password')
+    parser.add_option('-i', '--import', dest='import_html', action="store_true", default=False, help="Import index.html into pandora.py")
+    parser.add_option('-e', '--export', dest='export_html', action="store_true", default=False, help="Export index.html from pandora.py")
     parser.add_option('-d', '--debug', dest='debug', action="store_true", default=False, help='debug XML to/from Pandora')
-    (options, args) = parser.parse_args()
+    options, args = parser.parse_args()
+    
+    
+    # we're importing html to be embedded
+    if options.import_html:
+        with open(join(THIS_DIR, "index.html"), "r") as h: html = h.read()
+        html = b64encode(zlib.compress(html, 9))
+        
+        # wrap it at 80 characters
+        html_chunks = []
+        while True:
+            chunk = html[:80]
+            html = html[80:]
+            if not chunk: break
+            html_chunks.append(chunk)
+        html = "\n".join(html_chunks)
+        
+        print html
+        exit()
+        
+    # we're exporting the embedded html into index.html
+    if options.export_html:
+        html = zlib.decompress(b64decode(html_page.replace("\n", "")))
+        html_file = join(THIS_DIR, "index.html")
+        with open(html_file, "w") as h: h.write(html)
+        exit()
+        
 
     if not options.password or not options.user:
         parser.error("Please provide your username and password with -u and -p")
@@ -1399,4 +1460,6 @@ if __name__ == "__main__":
 
     account = Account(options.user, options.password, debug=options.debug)
     server = PlayerServer(account)
+    
+    webopen("http://localhost:7000")
     server.serve()

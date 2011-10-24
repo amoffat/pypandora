@@ -150,6 +150,7 @@
 				width:500px;
 				height:500px;
 				background-color:rgba(0,0,0,.5);
+				background-size:100% 100%;
 				position:absolute;
 			}
 			
@@ -190,8 +191,8 @@
 				
 		        <div id="album_art_container">
 		        	<div id="overlay">Buffering...</div>
-		        	<img class="album_art" id="current_album_art" src="" width="500px" height="500px" style="z-index:20;" />
-		        	<img class="album_art" id="next_album_art" src="" width="500px" height="500px" style="z-index:10;"/>
+		        	<div class="album_art" id="current_album_art" style="z-index:20;"></div>
+		        	<div class="album_art" id="next_album_art" style="z-index:10;"></div>
 		        </div>
 	        </div>
 	        
@@ -239,22 +240,26 @@
 	        			if (data.purchase_amazon) {$("#purchase_itunes").attr("href", data.purchase_itunes).show();}
 	        			else {$("#purchase_itunes").hide();}
 	        			
-	        			/* what this does is sets the new album image to the
-	        			background img, then fades out the foreground, then
-	        			sets the hidden foreground to the current background
-	        			then shows it again */
-	        			$("#next_album_art").attr("src", data.album_art).load(function() {
-	        				$("#current_album_art").fadeOut("fast", function() {
-	        					$("#current_album_art").attr("src", data.album_art).load(function() {
-	        						$(this).show();
-	        					});
-	        				});
-	        			});
 	        			$("#track-artist").text(data.artist);
 	        			$("#track-title").text(data.title);        	
 	        			
 	        			var title = data.title + " by " + data.artist;
 	        			$("head title").text(title);
+	        			
+	        			
+	        			/* what this does is sets the new album image to the
+	        			background img, then fades out the foreground, then
+	        			sets the hidden foreground to the current background
+	        			then shows it again */
+	        			
+	        			var album_art = new Image();
+	        			album_art.src = data.album_art;
+	        			$(album_art).load(function() {
+	        				$("#next_album_art").css("background-image", "url("+data.album_art+")");
+	        				$("#current_album_art").fadeOut("fast", function() {
+	        					$(this).css("background-image", "url("+data.album_art+")").show();
+	        				});
+	        			});
         			}        			
         		})
         	}
@@ -283,6 +288,11 @@
         		$("#overlay").fadeOut("fast");
         	}
         	
+        	function set_volume(level, set_slider) {
+        		$("#jquery_jplayer").jPlayer("volume", level / 100);
+        		if (set_slider) {$("#volume").slider("value", level);}
+        	}
+        	
         	function account_info() {
         		$.get("/account_info", function(data) {
         			console.log(data);
@@ -300,6 +310,7 @@
         			
         			select.val(data.current_station);
         			current_station = data.current_station;
+        			set_volume(data.volume, true);
         		});
         	}
         	
@@ -351,10 +362,13 @@
         			range: "min",
         			min: 0,
         			max: 100,
-        			value: 60,
+        			value: 0,
         			animate: true,
         			slide: function(event, ui) {
-        				$("#jquery_jplayer").jPlayer("volume", ui.value / 100);
+        				set_volume(ui.value, false);
+        			},
+        			change: function(event, ui) {
+        				control("volume", {level: ui.value});
         			}
         		});
         		
