@@ -46,10 +46,10 @@ music_buffer_size = 10
 
 # settings
 settings = {
-    'volume': '87',
+    'volume': '58',
     'download_music': False,
     'download_directory': '/tmp',
-    'last_station': '517956713646870395',
+    'last_station': '386046194963576660',
 }
 
 
