@@ -49,7 +49,7 @@ settings = {
     'volume': '67',
     'download_music': False,
     'download_directory': '/tmp',
-    'last_station': '293699583441237844',
+    'last_station': '516528357978011476',
 }
 
 
@@ -467,7 +467,7 @@ class Song(object):
             
             test_art = httplib.HTTPConnection(art_url_parts.netloc)
             test_art.request("HEAD", art_url_parts.path)
-            if test_art.getresponse(True).status != 200: art_url = self.artRadio
+            if test_art.getresponse().status != 200: art_url = self.artRadio
         else:
             art_url = self.artistArtUrl
         
