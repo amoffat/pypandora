@@ -46,10 +46,10 @@ music_buffer_size = 10
 
 # settings
 settings = {
-    'volume': '58',
+    'volume': '0',
     'download_music': False,
     'download_directory': '/tmp',
-    'last_station': '386046194963576660',
+    'last_station': '517956713646870395',
 }
 
 
@@ -250,9 +250,13 @@ class Account(object):
         self.login()
         
     def handle_read(self, to_read, to_write, to_err, shared_data):
-        if shared_data["music_buffers"][0].full(): return
+        if shared_data["music_buffer"].full(): return
         chunk = self.current_song.read()
-        if chunk: shared_data["music_buffers"][0].put(chunk)
+        
+        if chunk: shared_data["music_buffer"].put(chunk)
+        # song is done
+        elif chunk is False and self.current_song.done_playing:
+            self.current_station.next()
         
     def next(self):
         if self.current_station: self.current_station.next()
@@ -510,10 +514,15 @@ class Song(object):
     
     @property
     def play_progress(self):
+        now = time.time()
         return 100 * self.position / self.duration
     
     @property
-    def done(self):
+    def done_playing(self):
+        return time.time() - self._started_streaming >= self.duration
+    
+    @property
+    def done_downloading(self):
         return self.download_progress == self.song_size
     
     def read(self):
@@ -547,9 +556,9 @@ class Song(object):
         sleep_amt = Song.read_chunk_size / bytes_per_second
         
         # so we know how short of time we have to sleep to stream perfectly,
-        # but we're going to lower it by a third, so we never suffer from
+        # but we're going to lower it, so we never suffer from
         # a buffer underrun
-        sleep_amt *= .66666
+        sleep_amt *= .8
 
 
         split = urlsplit(self.url)
@@ -588,11 +597,12 @@ class Song(object):
 
         mp3_data = []
         self.download_progress = 0
+        self._started_streaming = time.time()
         last_read = 0
-
+        
         # do the actual reading of the data and yielding it.  if we're
         # successful, we yield some bytes, if we would block, yield None,
-        while not self.done:
+        while not self.done_downloading:
             
             # check if it's time to read more music yet.
             now = time.time()
@@ -614,7 +624,7 @@ class Song(object):
             # disconnected?  do we need to reconnect, or have we read everything
             # and the song is done?
             elif chunk is False:
-                if not self.done:
+                if not self.done_downloading:
                     self.log.error("disconnected, reconnecting at byte %d of %d", self.download_progress, self.song_size)
                     self.sock, headers = reconnect()
                     read_amt = int(headers["Content-Length"])
@@ -645,9 +655,6 @@ class Song(object):
             h = open(self.filename, "w")
             h.write(tag.binary() + mp3_data)
             h.close()
-            
-        
-        self.station.next()
         
         
 
@@ -1162,9 +1169,11 @@ class MagicSocket(socket.socket):
 
 
 class WebConnection(object):
-    def __init__(self, sock, pandora_account):
+    def __init__(self, sock, source, pandora_account):
         self.pandora_account = pandora_account
         self.sock = sock
+        self.source = source
+        self.local = self.source == "127.0.0.1"
         
         self.headers = None
         self.path = None
@@ -1190,11 +1199,11 @@ class WebConnection(object):
             to_err.remove(self)
             
         # long-polling requests
-        elif self.path == "/messages":
-            self.params
-            self.close()
-            to_write.remove(self)
-            to_err.remove(self)
+        elif self.path == "/events":
+            shared_data["long_pollers"].append(self)
+            #self.close()
+            #to_write.remove(self)
+            #to_err.remove(self)
             
         elif self.path == "/account_info":
             self.send_json(self.pandora_account.json_data)
@@ -1211,7 +1220,7 @@ class WebConnection(object):
         elif self.path.startswith("/control/"):            
             command = self.path.replace("/control/", "")
             if command == "next_song":
-                shared_data["music_buffers"][0] = Queue(music_buffer_size)
+                shared_data["music_buffer"] = Queue(music_buffer_size)
                 self.pandora_account.next()
                 
             elif command == "change_station":
@@ -1229,8 +1238,8 @@ class WebConnection(object):
             to_write.remove(self)
             to_err.remove(self)
            
-        elif self.path == "/m":
-            try: chunk = shared_data["music_buffers"][0].get(False)
+        elif self.path == "/m" and self.local:            
+            try: chunk = shared_data["music_buffer"].get(False)
             except: return
             
             done = self.stream_music(chunk)
@@ -1333,9 +1342,10 @@ class PlayerServer(object):
         station = None
         last_station = settings.get("last_station", None)
         if last_station: station = pandora_account.stations.get(last_station, None)
-        
         # ...or play a random one
-        if not station: station = choice(pandora_account.stations.values())
+        if not station:
+            station = choice(pandora_account.stations.values())
+            save_setting("last_station", station.id)
         station.play()
         
         self.to_read = set([self.pandora_account])
@@ -1354,10 +1364,7 @@ class PlayerServer(object):
         self.to_read.add(server)
         last_music_read = time.time()
         shared_data = {
-            "music_buffers": [
-                Queue(music_buffer_size),
-                Queue(music_buffer_size),
-            ],
+            "music_buffer": Queue(music_buffer_size),
             "messages": []
         }
         
@@ -1375,7 +1382,7 @@ class PlayerServer(object):
                     conn, addr = server.accept()
                     conn.setblocking(0)
                     
-                    conn = WebConnection(MagicSocket(sock=conn), self.pandora_account)
+                    conn = WebConnection(MagicSocket(sock=conn), addr[0], self.pandora_account)
                     self.to_read.add(conn)
                     self.to_err.add(conn)
                     
