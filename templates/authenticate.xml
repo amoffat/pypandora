@@ -1,1 +1,0 @@
-<?xml version="1.0"?><methodCall><methodName>listener.authenticateListener</methodName><params><param><value><int>$timestamp</int></value></param><param><value><string>$email</string></value></param><param><value><string>$password</string></value></param></params></methodCall>

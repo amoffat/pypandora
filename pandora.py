@@ -49,7 +49,7 @@ settings = {
     'volume': '0',
     'download_music': False,
     'download_directory': '/tmp',
-    'last_station': '517956713646870395',
+    'last_station': '386592394544543572',
 }
 
 
@@ -93,6 +93,29 @@ class Connection(object):
     _pandora_host = "www.pandora.com"
     _pandora_port = 80
     _pandora_rpc_path = "/radio/xmlrpc/v%d" % _pandora_protocol_version
+    
+    templates = {
+        "sync": """
+eNqzsa/IzVEoSy0qzszPs1Uy1DNQsrezyU0tychPcU7MyYGx/RJzU+1yM4uT9Yor85Jt9JFEbQoSixJz
+i+1s9OEMJP0Afngihg==""",
+        "add_feedback": """
+eNqdkssKwjAQRX9FSteNgo/NmC4El/6CTJuhhuZRkrT4+caSQl2IravMzdwzhLmB8qnVZiDnpTXnbFds
+s5KDpvCw4oJKTfUNNXEfMERbgUJciUSFdQts1ocOHWqfTg4Dqj7eShN4HqSmyOsO2FsDS02WvJ+ID06a
+JlK2JQMsyYVQeuZdirWk7r2s/+B83MZCJkfX7H+MraxVhGb0HoBNcgV1XEyN4UTi9CUXNmXKZp/iBbQI
+yo4=""",
+        "authenticate": """
+eNqNj8EKwkAMRH9FSs+N3uP24FX8h2CDDWx2yyZt/XwVtlAPgqdkJvNggv1T42HhYpLTuTl1x6YPqOxj
+Hi4U47bfSDlEMefEpaPZR04ud3K+VhNhl8SJCqnVGXChOL9dSR5aF2Vz0gnhoxHqEWr2GzEvkh6hZSWJ
+CFX+CU1ktuYy/OZgKwq7n1/FhWTE""",
+        "get_playlist": """
+eNq1ks8KwjAMxl9Fxs7LvMfuIHj0FSSwOItNO9o49O2t0MG8iDvslH+/j/CRYPcUt5s4Jhv8odo3bdUZ
+FNZb6I/k3JyfSdiMjl7OJm0G1lOkQdgrwgLAkSJJKtHgRO6Ru9arqdUKJyUZET41QhlCYb8lSaP1Q1aF
+O3uEUv4pyms027nYfqWyXclvi9fXEIV0Yw8/eJjPCYuHeAObkcrC""",
+        "get_stations": """
+eNpljrEOgzAMRH8FIWbc7iYM3bv0CyzVolHjBMUu4vNJ1SCBOvnOd082jquEZuGsPsWhvfaXdnQobK/0
+vFEIu76TsFMjK7V+Ynv8pCIccpwpk2idDhcKn7L10VxnXrjwMiN8PUINoXbPiFr2cSpUenNEqPYPgv0g
+HD7eAIijTD8="""
+    }
 
     def __init__(self, debug=False):
         self.debug = debug
@@ -167,14 +190,8 @@ class Connection(object):
 
 
     def get_template(self, tmpl, params={}):
-        """ returns template from the template directory and populates it with
-        the params dict.  this saves a lot of work having to manually build
-        an xml template """
-        tmpl_file = join(TEMPLATE_DIR, tmpl) + ".xml"
-        h = open(tmpl_file, "r")
-        xml = Template(h.read())
-        h.close()
-
+        tmpl = zlib.decompress(b64decode(self.templates[tmpl].strip().replace("\n", "")))        
+        xml = Template(tmpl)
         return xml.substitute(params).strip()
 
 
