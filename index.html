@@ -12,6 +12,10 @@
 				width:500px;
 			}
 			
+			img {
+				border:0;
+			}
+			
 			#album_art_container {				
 				-webkit-box-shadow: 0px 0px 20px 0px rgba(0, 0, 0, 1);
 				-moz-box-shadow: 0px 0px 20px 0px rgba(0, 0, 0, 1);
@@ -228,10 +232,11 @@
         	var current_song = null;
         	var current_station = null;
         	var overlay_interval = null;
+        	var player_ready = false;
         
         	function long_poll() {
         		$.get("/events", function(data) {
-        			console.log(data);
+        			//console.log(data);
         		});
         	}
         
@@ -245,7 +250,7 @@
         			$("#volume").show();
         			$("#controls").show();
         			
-        			console.log(data);
+        			//console.log(data);
         			
         			if (current_song != data.id) {
 	        			current_song = data.id;
@@ -270,26 +275,28 @@
 	        			var album_art = new Image();
 	        			var album_loader_overlay;
 	        			$(album_art).load(function() {
+	        				clearTimeout(album_loader_overlay);
+	        				overlay_hide();
 	        				$("#next_album_art").css("background-image", "url("+data.album_art+")");
 	        				$("#current_album_art").fadeOut("fast", function() {
 	        					$(this).css("background-image", "url("+data.album_art+")").show();
-	        					overlay_hide();
 	        				});
 	        			});
 	        			$(album_art).error(function() {
+	        				overlay_hide();
 	        				$("#next_album_art").css("background-image", "none");
 	        				$("#current_album_art").css("background-image", "none");
-	        				overlay_hide();
 	        			})
 	        			/* we don't want the overlay to load if the image loads
 	        			instantly */
-	        			album_loader_overlay = setTimeout(500, function() {overlay_show("Loading album art");});
+	        			album_loader_overlay = setTimeout(function() {overlay_show("Loading album art");}, 500);
 	        			album_art.src = data.album_art;
         			}        			
         		})
         	}
         	
         	function restart_music() {
+        		if (!player_ready) return;
         		$("#jquery_jplayer").jPlayer("clearMedia").jPlayer("setMedia", {mp3:"/m"}).jPlayer("play");
         	}
         	
@@ -330,13 +337,14 @@
         	}
         	
         	function set_volume(level, set_slider) {
+        		if (!player_ready) return;
         		$("#jquery_jplayer").jPlayer("volume", level / 100);
         		if (set_slider) {$("#volume").slider("value", level);}
         	}
         	
         	function account_info() {
         		$.get("/account_info", function(data) {
-        			console.log(data);
+        			//console.log(data);
         			
         			
         			var select = $("#stations");
@@ -374,22 +382,28 @@
         	
         		$("#jquery_jplayer").jPlayer({
         			solution: "html,flash",
-        			ready: function () {
+        			ready: function (event) {
+                		var load_trigger = $.jPlayer.event.canplay;
+                		if (event.jPlayer.flash.used) {load_trigger = $.jPlayer.event.loadstart;}        		
+                		$(this).bind(load_trigger, function() {
+            				overlay_hide();
+            				song_info();
+                		});
+                		
+                		
         				$(this).jPlayer("setMedia", {mp3:"/m"}).jPlayer("play");
+        				player_ready = true;
+                		account_info();
         			},
         			preload: "none",
         			swfPath: "http://jplayer.org/latest/js/",
         			supplied: "mp3",
-        			wmode: "window"
+        			wmode: "window",
+        			errorAlerts: true
         		});
         		
         		
-        		var load_trigger = $.jPlayer.event.canplay;
-        		if ($.browser.msie || $.browser.opera) {load_trigger = $.jPlayer.event.loadstart;}        		
-        		$("#jquery_jplayer").bind(load_trigger, function() {
-    				overlay_hide();
-    				song_info();
-        		});
+        		
 
         		
         		$("#next").click(change_song);        		
@@ -400,7 +414,6 @@
         				change_station($(this).val());
         			}
         		})
-        		
         		
         		$("#volume").slider({
         			orientation: "vertical",
@@ -416,9 +429,7 @@
         				control("volume", {level: ui.value});
         			}
         		});
-        		
-        		account_info();
-        		overlay_show("Buffering")
+        		overlay_show("Buffering");
         	});
         </script>
         
