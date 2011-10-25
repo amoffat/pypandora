@@ -46,10 +46,10 @@ music_buffer_size = 10
 
 # settings
 settings = {
-    'volume': '0',
+    'volume': '67',
     'download_music': False,
     'download_directory': '/tmp',
-    'last_station': '386592394544543572',
+    'last_station': '551005232989075284',
 }
 
 
@@ -94,7 +94,7 @@ class Connection(object):
     _pandora_port = 80
     _pandora_rpc_path = "/radio/xmlrpc/v%d" % _pandora_protocol_version
     
-    templates = {
+    _templates = {
         "sync": """
 eNqzsa/IzVEoSy0qzszPs1Uy1DNQsrezyU0tychPcU7MyYGx/RJzU+1yM4uT9Yor85Jt9JFEbQoSixJz
 i+1s9OEMJP0Afngihg==""",
@@ -190,7 +190,7 @@ HD7eAIijTD8="""
 
 
     def get_template(self, tmpl, params={}):
-        tmpl = zlib.decompress(b64decode(self.templates[tmpl].strip().replace("\n", "")))        
+        tmpl = zlib.decompress(b64decode(self._templates[tmpl].strip().replace("\n", "")))        
         xml = Template(tmpl)
         return xml.substitute(params).strip()
 
@@ -273,6 +273,7 @@ class Account(object):
         if chunk: shared_data["music_buffer"].put(chunk)
         # song is done
         elif chunk is False and self.current_song.done_playing:
+            shared_data["music_buffer"] = Queue(music_buffer_size)
             self.current_station.next()
         
     def next(self):
@@ -293,8 +294,10 @@ class Account(object):
             if self.connection.authenticate(self.email, self.password):
                 logged_in = True
                 break
-            else: time.sleep(1)
-        if not logged_in: raise Exception, "can't log in"
+            else:
+                self.log.error("failed login (this happens quite a bit), trying again...")
+                time.sleep(1)
+        if not logged_in: raise Exception, "can't log in.  wrong username or password?"
         self.log.info("logged in")
         
     @property
@@ -1186,6 +1189,8 @@ class MagicSocket(socket.socket):
 
 
 class WebConnection(object):
+    timeout = 60
+    
     def __init__(self, sock, source, pandora_account):
         self.pandora_account = pandora_account
         self.sock = sock
@@ -1198,6 +1203,7 @@ class WebConnection(object):
         self._request_gen = None
         
         self._stream_gen = None
+        self.connected = time.time()
         
         
     def handle_read(self, to_read, to_write, to_err, shared_data):
