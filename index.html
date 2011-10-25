@@ -268,16 +268,22 @@
 	        			sets the hidden foreground to the current background
 	        			then shows it again */	        			
 	        			var album_art = new Image();
+	        			var album_loader_overlay;
 	        			$(album_art).load(function() {
 	        				$("#next_album_art").css("background-image", "url("+data.album_art+")");
 	        				$("#current_album_art").fadeOut("fast", function() {
 	        					$(this).css("background-image", "url("+data.album_art+")").show();
+	        					overlay_hide();
 	        				});
 	        			});
 	        			$(album_art).error(function() {
 	        				$("#next_album_art").css("background-image", "none");
 	        				$("#current_album_art").css("background-image", "none");
+	        				overlay_hide();
 	        			})
+	        			/* we don't want the overlay to load if the image loads
+	        			instantly */
+	        			album_loader_overlay = setTimeout(500, function() {overlay_show("Loading album art");});
 	        			album_art.src = data.album_art;
         			}        			
         		})
@@ -315,6 +321,7 @@
         	}
         	function overlay_show(msg) {
         		$("#overlay").text(msg + " |").fadeIn("fast");
+        		clearInterval(overlay_interval);
         		overlay_interval = setInterval(update_overlay, 100);
         	}
         	function overlay_hide() {
