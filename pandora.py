@@ -625,7 +625,7 @@ class Song(object):
             
             # check if it's time to read more music yet.
             now = time.time()
-            if now - last_read < sleep_amt and self.download_progress > 131072:
+            if now - last_read < sleep_amt and self.download_progress > 262144:
                 yield None
                 continue
             
