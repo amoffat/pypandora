@@ -46,10 +46,10 @@ music_buffer_size = 20
 
 # settings
 settings = {
-    'volume': '4',
+    'volume': '57',
     'download_music': False,
     'download_directory': '/tmp',
-    'last_station': '517956713646870395',
+    'last_station': '289904271165618004',
 }
 
 
@@ -625,7 +625,7 @@ class Song(object):
             
             # check if it's time to read more music yet.
             now = time.time()
-            if now - last_read < sleep_amt and self.download_progress > 262144:
+            if now - last_read < sleep_amt and self.download_progress > 65536:
                 yield None
                 continue
             
@@ -1543,7 +1543,9 @@ if __name__ == "__main__":
     
     # we're importing html to be embedded
     if options.import_html:
-        with open(join(THIS_DIR, "index.html"), "r") as h: html = h.read()
+        html_file = join(THIS_DIR, "index.html")
+        logging.info("importing html from %s", html_file)
+        with open(html_file, "r") as h: html = h.read()
         html = b64encode(zlib.compress(html, 9))
         
         # wrap it at 80 characters
@@ -1559,8 +1561,12 @@ if __name__ == "__main__":
         exit()
         
     # we're exporting the embedded html into index.html
-    if options.export_html:
+    if options.export_html:    
         html_file = join(THIS_DIR, "index.html")
+        if exists(html_file):
+            logging.error("\n\n*** html NOT exported, %s already exists! ***\n\n", html_file)
+            exit()
+        logging.info("exporting html to %s", html_file)
         with open(html_file, "w") as h: h.write(html_page)
         exit()
         
