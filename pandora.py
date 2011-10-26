@@ -46,10 +46,10 @@ music_buffer_size = 20
 
 # settings
 settings = {
-    'volume': '67',
+    'volume': '4',
     'download_music': False,
     'download_directory': '/tmp',
-    'last_station': '516528357978011476',
+    'last_station': '517956713646870395',
 }
 
 
@@ -499,8 +499,8 @@ class Song(object):
         self.filename = join(settings["download_directory"], "%s-%s.mp3" % (format_title(self.artist), format_title(self.title)))
 
         self._stream_gen = None
-        self.sock = socket.socket()
-        
+        self.sock = None
+        self.read()        
         self.log = logging.getLogger(repr(self))
         
         
@@ -565,9 +565,7 @@ class Song(object):
         
 
     def _stream(self):
-        """ a generator which streams some music """
-
-        self.log.info("downloading")        
+        """ a generator which streams some music """  
 
         # figure out how fast we should download and how long we need to sleep
         # in between reads.  we have to do this so as to not stream to quickly
@@ -607,6 +605,7 @@ class Song(object):
         
         self.sock, headers = reconnect()
         yield None
+        self.log.info("downloading")
         
         # determine the size of the song, and from that, how long the song is
         # in seconds
@@ -1403,7 +1402,7 @@ class WebConnection(object):
         
     def send_json(self, data):
         data = json.dumps(data)
-        self.sock.send("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %s\r\n\r\n" % len(data))
+        self.sock.send("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: %s\r\n\r\n" % len(data))
         self.sock.send(data)
 
     def serve_webpage(self):
@@ -1412,7 +1411,7 @@ class WebConnection(object):
         else: page = html_page
         
         try:
-            self.sock.send("HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n" % len(page))
+            self.sock.send("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: %s\r\n\r\n" % len(page))
             self.sock.send(page)
         except:
             print "serving webpage", sys.exc_info()
