@@ -165,11 +165,22 @@
 				font-variant:small-caps;
 			}
 			
-			#volume {
+			#volume_container {
 				height:500px;
 				position:absolute;
 				left:-55px;
 				bottom:0px; 
+			}
+			#volume {
+				height:500px;
+				cursor:pointer;
+				z-index:10;
+			}
+			#volume_icon {
+				position:absolute;
+				bottom:10px;
+				left:10px;
+				z-index:20;
 			}
 		</style>
 	</head>
@@ -191,8 +202,11 @@
 				</span>
 			</div>
 			
-			<div style="position:relative; height:500px;">				
-				<div id="volume" style="display:none;"></div>
+			<div style="position:relative; height:500px;">	
+				<div id="volume_container" style="display:none;">			
+					<div id="volume"></div>
+					<img id="volume_icon" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAOCAYAAAAmL5yKAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9sKGwEkILLBJSoAAAB/SURBVCjPY2AgAP7//5//////9Qykgv///+v///9//38I2I8mHk9Ic/1/VLAfSfN7qJg9No32////v/8fE2AzYD8u2/7jMgCLen0mBtLBBCR2AMkGMDIyfmRgYLgA45PjAhTAREb08jMwMBhQ4oICJPYGyqORqgmJakmZlMwEAK5BC3JW3W1qAAAAAElFTkSuQmCC" />
+				</div>
 				
 				<div id="controls" style="position:absolute; right: -67px; display:none;">
 					<div id="like" class="player_button">&#9650;</div>
@@ -247,7 +261,7 @@
         	function song_info() {
         		$.get("/current_song_info", function(data) {
         			$("#header").show();
-        			$("#volume").show();
+        			$("#volume_container").show();
         			$("#controls").show();
         			
         			//console.log(data);

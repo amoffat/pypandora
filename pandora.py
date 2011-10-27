@@ -46,7 +46,7 @@ music_buffer_size = 20
 
 # settings
 settings = {
-    'volume': '57',
+    'volume': '21',
     'download_music': False,
     'download_directory': '/tmp',
     'last_station': '289904271165618004',
@@ -623,9 +623,10 @@ class Song(object):
         # successful, we yield some bytes, if we would block, yield None,
         while not self.done_downloading:
             
-            # check if it's time to read more music yet.
+            # check if it's time to read more music yet.  preload the
+            # first 128k quickly so songs play immediately
             now = time.time()
-            if now - last_read < sleep_amt and self.download_progress > 262144:
+            if now - last_read < sleep_amt and self.download_progress > 131072:
                 yield None
                 continue
             
