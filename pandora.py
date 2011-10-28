@@ -46,10 +46,10 @@ music_buffer_size = 20
 
 # settings
 settings = {
-    'volume': '21',
+    'volume': '6',
     'download_music': False,
     'download_directory': '/tmp',
-    'last_station': '289904271165618004',
+    'last_station': '386046194963576660',
 }
 
 
@@ -427,7 +427,7 @@ class Station(object):
                 got_playlist = True
                 break
             else:
-                self.log.error("failed to get playlist, trying %d more times" % get_playlist_tries)
+                self.log.error("failed to get playlist, trying again times")
                 self.account.login()
 
         if not got_playlist: raise Exception, "can't get playlist!"
