@@ -104,6 +104,45 @@
 				background-color: rgba(0,0,0,.9);
 			}
 			
+			#volume_overlay {
+				width:50px;
+				height:30px;
+				position:absolute;
+				left: -75px;
+				top:0%;
+			}
+			#volume_box_tri_container {
+				position:absolute;
+				top:-15px;
+				width:65px;
+				height:30px;
+			}
+			
+			#volume_overlay_box {
+				width:50px;
+				height:30px;
+				background-color:black;
+				color:white;
+				position:absolute;
+				top:0;
+				left:0;
+				text-align:center;
+				line-height:30px;
+				font-family:monospace;
+				font-size:11px;
+			}
+			#volume_overlay_triangle {
+				position:absolute;
+				top:0;
+				right:0px;
+				width:0px;
+				height:0px;
+				border-style:solid;
+				border:0;
+				border-top: 15px solid transparent;
+        		border-bottom: 15px solid transparent;
+		        border-left: 15px solid black;
+			}
 			
 			.ui-slider-vertical {
 				width:35px;
@@ -135,7 +174,7 @@
 				font-size: .7em;
 				display: block;
 				border:0;
-				border-top: 1px solid #2a2a2a;
+				/*border-top: 1px solid #2a2a2a;*/
 				background-color:rgba(0,0,0,.7);
 				background-position: 0 0;
 			}
@@ -183,6 +222,8 @@
 				left:10px;
 				z-index:20;
 			}
+			
+			
 		</style>
 	</head>
 	
@@ -204,7 +245,14 @@
 			</div>
 			
 			<div style="position:relative; height:500px;">	
-				<div id="volume_container" style="display:none;">			
+				<div id="volume_container">			
+				
+					<div id="volume_overlay" style="display:none;">
+						<div id="volume_box_tri_container">
+							<div id="volume_overlay_box"></div>
+							<div id="volume_overlay_triangle"></div>
+						</div>
+					</div>
 					<div id="volume"></div>
 					<img id="volume_icon" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAOCAYAAAAmL5yKAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9sKGwEkILLBJSoAAAB/SURBVCjPY2AgAP7//5//////9Qykgv///+v///9//38I2I8mHk9Ic/1/VLAfSfN7qJg9No32////v/8fE2AzYD8u2/7jMgCLen0mBtLBBCR2AMkGMDIyfmRgYLgA45PjAhTAREb08jMwMBhQ4oICJPYGyqORqgmJakmZlMwEAK5BC3JW3W1qAAAAAElFTkSuQmCC" />
 				</div>
@@ -242,6 +290,7 @@
 				</li>
 			</ul>
 		</div>
+		
         
         <script type="text/javascript">
         	var current_song = null;
@@ -251,7 +300,7 @@
         
         	function long_poll() {
         		$.get("/events", function(data) {
-        			//console.log(data);
+        			console.log(data);
         		});
         	}
         
@@ -420,7 +469,7 @@
         			swfPath: "http://jplayer.org/latest/js/",
         			supplied: "mp3",
         			wmode: "window",
-        			errorAlerts: true
+        			errorAlerts: false
         		});
         		
         		
@@ -436,21 +485,30 @@
         			}
         		})
         		
+        		var fade_volume_overlay;
         		$("#volume").slider({
         			orientation: "vertical",
         			range: "min",
         			min: 0,
         			max: 100,
         			value: 0,
-        			animate: true,
+        			animate: false,
         			slide: function(event, ui) {
+        				clearTimeout(fade_volume_overlay);
         				set_volume(ui.value, false);
+        				/*
+        				$("#volume_overlay").show().css("top", (100 - ui.value) + "%");
+        				$("#volume_overlay_box").text(ui.value + "%");
+        				fade_volume_overlay = setTimeout(function() {$("#volume_overlay").fadeOut();}, 500);
+        				*/
         			},
         			change: function(event, ui) {
         				control("volume", {level: ui.value});
         			}
         		});
         		overlay_show("Buffering");
+        		
+        		long_poll();
         	});
         </script>
         

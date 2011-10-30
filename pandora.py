@@ -46,10 +46,10 @@ music_buffer_size = 20
 
 # settings
 settings = {
-    'volume': '6',
+    'volume': '26',
     'download_music': False,
     'download_directory': '/tmp',
-    'last_station': '386046194963576660',
+    'last_station': '384510739730354043',
 }
 
 
@@ -259,22 +259,47 @@ class Account(object):
         self.recently_played = []
 
         self.current_station = None
+        self.msg_subscribers = []
         
         # this is used just for its fileno() in the case that we have no current
         # song.  this way, the account object can still work in select.select
         # (which needs fileno())
         self._dummy_socket = socket.socket()
         self.login()
+        self.start()
+        
+        
+    def start(self):
+        """ loads the last-played station and kicks it to start """
+        # load our previously-saved station
+        station = None
+        last_station = settings.get("last_station", None)
+        if last_station: station = self.stations.get(last_station, None)
+        # ...or play a random one
+        if not station:
+            station = choice(self.stations.values())
+            save_setting("last_station", station.id)
+        station.play()
+        
         
     def handle_read(self, to_read, to_write, to_err, shared_data):
-        if shared_data["music_buffer"].full(): return
-        chunk = self.current_song.read()
+        song_state = self.current_song.state
         
-        if chunk: shared_data["music_buffer"].put(chunk)
-        # song is done
-        elif chunk is False and self.current_song.done_playing:
-            shared_data["music_buffer"] = Queue(music_buffer_size)
-            self.current_station.next()
+        # are we done reading all the headers for the song?
+        if song_state is Song.READING_HEADERS:
+            self.current_song.read()
+            return
+        
+        elif song_state is Song.STREAMING:
+            if shared_data["music_buffer"].full(): return
+            chunk = self.current_song.read()
+            
+            if chunk: shared_data["music_buffer"].put(chunk)
+            # song is done
+            elif chunk is False and self.current_song.done_playing:
+                shared_data["music_buffer"] = Queue(music_buffer_size)
+                self.current_station.next()
+                
         
     def next(self):
         if self.current_station: self.current_station.next()
@@ -446,6 +471,12 @@ class Song(object):
     bitrate = 128
     read_chunk_size = 1024
     
+    # states
+    SENDING_REQUEST = 0
+    READING_HEADERS = 1
+    STREAMING = 2
+    DONE = 3
+    
 
     def __init__(self, station, **kwargs):
         self.station = station
@@ -488,6 +519,7 @@ class Song(object):
         self.duration = 0
         self.song_size = None
         self.download_progress = 0
+        self.state = Song.READING_HEADERS
 
         def format_title(part):
             part = part.lower()
@@ -498,10 +530,11 @@ class Song(object):
 
         self.filename = join(settings["download_directory"], "%s-%s.mp3" % (format_title(self.artist), format_title(self.title)))
 
-        self._stream_gen = None
         self.sock = None
-        self.read()        
+        
+        # FIXME: bug if the song has weird characters
         self.log = logging.getLogger(repr(self))
+        
         
         
     @property
@@ -544,12 +577,6 @@ class Song(object):
     @property
     def done_downloading(self):
         return self.download_progress == self.song_size
-    
-    def read(self):
-        if not self._stream_gen: self._stream_gen = self._stream()
-        try: data = self._stream_gen.next()
-        except StopIteration: return False
-        return data
         
     def fileno(self):
         return self.sock.fileno()
@@ -561,62 +588,64 @@ class Song(object):
         
     
     def play(self):
-        self.station.current_song = self
+        self.connect()
         
-
-    def _stream(self):
-        """ a generator which streams some music """  
-
-        # figure out how fast we should download and how long we need to sleep
-        # in between reads.  we have to do this so as to not stream to quickly
-        # from pandora's servers        
-        bytes_per_second = self.bitrate * 125.0
-        sleep_amt = Song.read_chunk_size / bytes_per_second
         
-        # so we know how short of time we have to sleep to stream perfectly,
-        # but we're going to lower it, so we never suffer from
-        # a buffer underrun
-        sleep_amt *= .8
-
-
+        
+    def connect(self):
+        self.log.info("downloading")
+        
         split = urlsplit(self.url)
         host = split.netloc
         path = split.path + "?" + split.query
-
-
-
-        # this is a little helper function because we might need to reconnect
-        # a few times if a read fails.  we'll just pass in the byte_counter
-        # to pick back up where we left off
-        def reconnect():
-            req = """GET %s HTTP/1.0\r\nHost: %s\r\nRange: bytes=%d-\r\nUser-Agent: pypandora\r\nAccept: */*\r\n\r\n"""
-            sock = MagicSocket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect((host, 80))
-            sock.send(req % (path, host, self.download_progress))
-            
-            # we wait until after we have the headers to switch to non-blocking
-            # just because it's easier that way.  in the worst case scenario,
-            # pandora's servers hang serving up the headers, causing our app to hang
-            headers = sock.read_until("\r\n\r\n", include_last=True)
-            headers = headers.strip().split("\r\n")
-            headers = dict([h.split(": ") for h in headers[1:]])
-            sock.setblocking(0)
-            return sock, headers
         
-        self.sock, headers = reconnect()
-        yield None
-        self.log.info("downloading")
+        req = """GET %s HTTP/1.0\r\nHost: %s\r\nRange: bytes=%d-\r\nUser-Agent: pypandora\r\nAccept: */*\r\n\r\n"""
+        self.sock = MagicSocket(host=host, port=80)
+        self.sock.write_string(req % (path, host, self.download_progress))
+        self.state = Song.SENDING_REQUEST
+    
+
+    def read(self):
+        if self.state is Song.DONE:
+            return
         
-        # determine the size of the song, and from that, how long the song is
-        # in seconds
-        self.song_size = int(headers["Content-Length"])
-        self.duration = self.song_size / bytes_per_second
-        read_amt = self.song_size
+        if self.state is Song.SENDING_REQUEST:
+            done = self.sock.write()
+            if done:
+                self.state = Song.READING_HEADERS
+                self.sock.read_until("\r\n\r\n")
+            return
+        
+        elif self.state is Song.READING_HEADERS:
+            headers = self.sock.read()
+            if headers:
+                # parse our headers
+                headers = headers.strip().split("\r\n")
+                headers = dict([h.split(": ") for h in headers[1:]])
+                
+                # determine the size of the song, and from that, how long the
+                # song is in seconds
+                self.song_size = int(headers["Content-Length"])
+                self.duration = self.song_size / bytes_per_second
+                
+                # figure out how fast we should download and how long we need to sleep
+                # in between reads.  we have to do this so as to not stream to quickly
+                # from pandora's servers.  we lower it by 20% so we never suffer from
+                # a buffer underrun       
+                bytes_per_second = self.bitrate * 125.0
+                self.sleep_amt = Song.read_chunk_size * .8 / bytes_per_second
+                
+                self.state = Song.STREAMING
+                self.sock.read_until(self.song_size - self.download_progress)
+                self._started_streaming = time.time()
+                self._mp3_data = []
+            return
 
-
-        mp3_data = []
-        self.download_progress = 0
-        self._started_streaming = time.time()
+        elif self.state is Song.STREAMING:
+            if self.done_downloading:
+                self.state = Song.DONE
+                return
+        
         last_read = 0
         
         # do the actual reading of the data and yielding it.  if we're
@@ -638,7 +667,7 @@ class Song(object):
             # got data?  aggregate it and return it
             if chunk:
                 self.download_progress += len(chunk)
-                mp3_data.append(chunk)
+                self._mp3_data.append(chunk)
                 yield chunk
                 
             # disconnected?  do we need to reconnect, or have we read everything
@@ -660,7 +689,10 @@ class Song(object):
             
         if settings["download_music"]:
             self.log.info("saving file to %s", self.filename)
-            mp3_data = "".join(mp3_data)
+            mp3_data = "".join(self._mp3_data)
+            
+            # save on memory
+            del self._mp3_data
             
             # tag the mp3
             tag = ID3Tag()
@@ -1073,95 +1105,99 @@ in_key_s = [in_key_s[i:i+256] for i in xrange(0, len(in_key_s), 256)]
 
 
 html_page = """
-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"""
+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"""
 html_page = zlib.decompress(b64decode(html_page.replace("\n", "")))
 
 
@@ -1173,99 +1209,106 @@ html_page = zlib.decompress(b64decode(html_page.replace("\n", "")))
 
 
 
-class MagicSocket(socket.socket):
-    """ this is a socket subclass that simplifies reading until a specific
-    delimeter (for example, end of http headers) and reading until a specific
-    amount has been read (for example, reading the body of an http response
-    based on the content-length in the http headers).  it gets kind of
-    complicated when you add in non-blocking sockets..."""
+
+
+class MagicSocket(object):
     
-    def __init__(self, *args, **kwargs):
-        self.tmp_buffer = ""
-        self._read_gen = None
+    def __init__(self, **kwargs):
+        self.read_buffer = ""
+        self.write_buffer = ""
         
-        sock = kwargs.get("sock")
-        if sock: self._sock = sock
-        else:
-            self._sock = self
-            super(MagicSocket, self).__init__(*args, **kwargs)
-            
-    def __getattr__(self, name):
-        return getattr(self._sock, name)
+        self._read_delim = ""
+        self._read_amount = 0
+        self._delim_cursor = 0
         
-    def read_until(self, *delims, **kwargs):
-        if not self._read_gen: self._read_gen = self._read_until(*delims, **kwargs)
-        ret =  self._read_gen.next()
-        if ret: self._read_gen = None
-        return ret
+        # use an existing socket.  useful for connection sockets created from
+        # a server socket
+        self.sock = kwargs.get("sock", None)
         
-    def _read_until(self, *delims, **kwargs):
-        buf = kwargs.get("buf", 1024)
-        break_after_read = kwargs.get("break_after_read", False)
-        include_last = kwargs.get("include_last", False)
-
-        num_bytes = 0
-        if len(delims) == 1 and isinstance(delims[0], int):
-            num_bytes = delims[0]
-            
-        read = ""
-        cursor = 0
-        last_cursor = None
-        first_find = None
-        
-        delims = list(delims)
-        delims.reverse()
-        current_delim = delims.pop()
-        
-        def recv(buf):
-            read = ""
-            if self.tmp_buffer:
-                read += self.tmp_buffer[:buf]
-                self.tmp_buffer = self.tmp_buffer[buf:]
-                buf -= len(read)
-                if not buf: return read     
-            return read + self._sock.recv(buf)
-        
-        while True:
-            if not num_bytes:
-                # search through the data we have for the delimiters
-                lread = len(read)
-                while cursor < lread and cursor != last_cursor:
-                    found = read.find(current_delim, cursor)
-                    last_cursor = cursor
-                    if found == -1:
-                        cursor = lread - len(current_delim)
-                    else:
-                        if first_find is None: first_find = found
-                        cursor = found + len(current_delim)
-                        try: current_delim = delims.pop()
-                        except IndexError:
-                            if first_find == found: first_find = 0
-                            
-                            if include_last:
-                                self.tmp_buffer = read[found+len(current_delim):]
-                                yield read[first_find:found+len(current_delim)]
-                            else:
-                                self.tmp_buffer = read[found:]
-                                yield read[first_find:found]
-             
-                last_cursor = None
-            
-            
-            try: data = recv(buf)
-            except socket.error, err:
-                if err.errno is errno.EWOULDBLOCK: yield None
-                else:
-                    yield False
-            else:
-                if not data: yield False
-                if break_after_read: yield data
+        # or use a new socket, useful for making new network connections
+        if not self.sock:    
+            sock_type = kwargs.get("sock_type", (socket.AF_INET, socket.SOCK_STREAM))
+            self.sock = socket.socket(*sock_type)
+            self.sock.connect((kwargs["host"], kwargs["port"]))
                 
-                read += data
-                if num_bytes and len(read) >= num_bytes and not break_after_read:
-                    self.tmp_buffer = read[num_bytes:]
-                    yield read[:num_bytes]
-
+        self.sock.setblocking(0)
+    
+    
+    def read_until(self, delim, include_last=True):
+        self._read_amount = 0
+        self._read_delim = delim
+        self.include_last = include_last
+        
+    def read_amount(self, amount):
+        self._read_delim = ""
+        self._read_amount = amount
+    
+    
+    def _read_chunk(self, size):
+        try: data = self.sock.recv(size)            
+        except socket.error, err:
+            if err.errno is errno.EWOULDBLOCK: return None
+            else: raise
+        return data        
+            
+    def read(self, size=1024):
+        chunk = self._read_chunk(size)
+        if chunk is None: return None
+        
+        self.read_buffer += chunk
+        
+        # do we have a delimiter we're waiting for?
+        if self._read_delim:
+            # look for our delimiter
+            found = self.read_buffer.find(self._read_delim, self._delim_cursor)
+            
+            # not found?  mark where've last looked up until, taking into
+            # account that the delimiter might have gotten chopped up between
+            # consecutive reads
+            if found == -1:
+                self._delim_cursor = len(self.read_buffer) - len(self._read_delim) 
+                return None
+            
+            # found?  chop out and return everything we've read up until that
+            # delimter
+            else:
+                end_cursor = self._delim_cursor + found
+                if self.include_last: end_cursor += len(self._read_delim)
+                try: return self.read_buffer[:end_cursor]
+                finally:
+                    self.read_buffer = self.read_buffer[end_cursor:]
+                    self._read_delim = ""
+                    self._delim_cursor = 0
+                
+        # or are we just reading until a specified amount
+        elif self._read_amount and len(self.read_buffer) >= self._read_amount:
+            try: return self.read_buffer[:self._read_amount]
+            finally:
+                self.read_buffer =  self.read_buffer[self._read_amount:]
+                self._read_amount = 0
+                
+        return None
+    
+    def _send_chunk(self, chunk):
+        try: sent = self.sock.send(chunk)            
+        except socket.error, err:
+            if err.errno is errno.EWOULDBLOCK: return 0
+            else: raise
+        return sent
+    
+    
+    def write_string(self, data):
+        self.write_buffer += data        
+        
+    def write(self, size=1024):
+        chunk = self.write_buffer[:size]
+        sent = self._send_chunk(chunk)
+        self.write_buffer = self.write_buffer[sent:]
+        if not self.write_buffer: return True
+        return False 
+    
+    def __getattr__(self, name):
+        return getattr(self.sock, name)
 
 
 
@@ -1282,64 +1325,92 @@ class MagicSocket(socket.socket):
 class WebConnection(object):
     timeout = 60
     
-    def __init__(self, sock, source, pandora_account):
-        self.pandora_account = pandora_account
+    def __init__(self, sock, source):        
         self.sock = sock
+        self.sock.read_until("\r\n\r\n")
+        
         self.source = source
         self.local = self.source == "127.0.0.1"
+        
+        self.reading = True
+        self.writing = False
+        self.close_after_writing = True
         
         self.headers = None
         self.path = None
         self.params = {}
-        self._request_gen = None
-        
-        self._stream_gen = None
+
         self.connected = time.time()
         
         
     def handle_read(self, to_read, to_write, to_err, shared_data):
-        ret = self.request_read
-        if ret:
-            to_read.remove(self)
-            to_write.add(self)
-        elif ret is False:
-            to_read.remove(self)
+        if self.reading:
+            headers = self.sock.read()
+            if headers:
+                self.reading = False
+                
+                # parse the headers
+                headers = headers.strip().split("\r\n")
+                headers.reverse()
+                get_string = headers.pop()
+                headers.reverse()
+                
+                url = get_string.split()[1]
+                url = urlsplit(url)
+                
+                self.path = url.path
+                self.params = dict(parse_qsl(url.query))        
+                self.headers = dict([h.split(": ") for h in headers])
+                
+                to_read.remove(self)
+                to_write.add(self)
+            return
+    
+    
     
     def handle_write(self, to_read, to_write, to_err, shared_data):
+        # have we already begun writing and must flush out what's in the write
+        # buffer?
+        if self.writing:
+            if self.write():
+                self.writing = False
+                if self.close_after_writing:
+                    self.close()
+                    to_write.remove(self)
+                    to_err.remove(self)
+            return
+            
+            
+        # no?  ok let's process the request and queue up some data to be
+        # written the next time handle_write is called
+        
+        
+        # main page
         if self.path == "/":
             self.serve_webpage()
-            self.close()
-            to_write.remove(self)
-            to_err.remove(self)
             
         # long-polling requests
         elif self.path == "/events":
             shared_data["long_pollers"].append(self)
-            #self.close()
-            #to_write.remove(self)
-            #to_err.remove(self)
-            
+        
+        # gets things like last volume, last station, and station list    
         elif self.path == "/account_info":
-            self.send_json(self.pandora_account.json_data)
-            self.close()
-            to_write.remove(self)
-            to_err.remove(self)
+            self.send_json(shared_data["pandora_account"].json_data)
             
+        # what's currently playing
         elif self.path == "/current_song_info":
-            self.send_json(self.pandora_account.current_song.json_data)
-            self.close()
-            to_write.remove(self)
-            to_err.remove(self)
+            self.send_json(shared_data["pandora_account"].current_song.json_data)
            
+        # perform some action on the music player
         elif self.path.startswith("/control/"):            
             command = self.path.replace("/control/", "")
             if command == "next_song":
                 shared_data["music_buffer"] = Queue(music_buffer_size)
-                self.pandora_account.next()
+                shared_data["pandora_account"].next()
                 
             elif command == "change_station":
                 station_id = self.params["station_id"];
-                station = self.pandora_account.stations[station_id]
+                station = shared_data["pandora_account"].stations[station_id]
                 save_setting("last_station", station.id)
                 station.play()
                 
@@ -1348,142 +1419,70 @@ class WebConnection(object):
                 save_setting("volume", level)
             
             self.send_json({"status": True})
-            self.close()
-            to_write.remove(self)
-            to_err.remove(self)
            
-        elif self.path == "/m" and self.local:            
+        # this request is special in that it should never close after writing
+        # because it's a stream
+        elif self.path == "/m" and self.local:  
             try: chunk = shared_data["music_buffer"].get(False)
             except: return
             
+            if self.close_after_writing:
+                self.sock.write_string("HTTP/1.1 200 OK\r\n\r\n")
+            
             done = self.stream_music(chunk)
-            if done:
-                self.close()
-                to_write.remove(self)
-                to_err.remove(self)
-           
-        else:
-            self.close()
-            to_write.remove(self)
-            to_err.remove(self)
+            self.close_after_writing = False
+            
+            
+        self.writing = True
+        
+        
                    
         
     def fileno(self):
         return self.sock.fileno()
     
-    @property
-    def request_read(self):
-        if not self._request_gen: self._request_gen = self.read_request()
-        return self._request_gen.next()
-    
     def close(self):
         try: self.sock.shutdown(socket.SHUT_RDWR)
         except: pass
-        self.sock.close()
-    
-    def read_request(self):
-        headers = None
-        
-        while not headers:
-            headers = self.sock.read_until("\r\n\r\n", include_last=True)
-            if headers is None: yield None
-            elif headers is False:
-                yield False
-                raise StopIteration
-        
-        headers = headers.strip().split("\r\n")
-        headers.reverse()
-        get_string = headers.pop()
-        headers.reverse()
-        
-        url = get_string.split()[1]
-        url = urlsplit(url)
-        
-        self.path = url.path
-        self.params = dict(parse_qsl(url.query))        
-        self.headers = dict([h.split(": ") for h in headers])
-        yield True
-        
+        self.sock.close()        
         
     def send_json(self, data):
         data = json.dumps(data)
-        self.sock.send("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: %s\r\n\r\n" % len(data))
-        self.sock.send(data)
+        self.sock.write_string("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: %s\r\n\r\n" % len(data))
+        self.sock.write_string(data)
 
     def serve_webpage(self):
+        # do we use an overridden html page?
         if exists(join(THIS_DIR, "index.html")):
             with open("index.html", "r") as h: page = h.read()
+        # or the embedded html page
         else: page = html_page
         
-        try:
-            self.sock.send("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: %s\r\n\r\n" % len(page))
-            self.sock.send(page)
-        except:
-            print "serving webpage", sys.exc_info()
-    
-
-    def stream_music(self, music):
-        if not self._stream_gen:
-            self._stream_gen = self.send_stream(music)
-            done = self._stream_gen.next()
-        else: done = self._stream_gen.send(music)
-        return done            
-
-
-    def send_stream(self, music):
-        self.sock.send("HTTP/1.1 200 OK\r\n\r\n")
-        
-        while True:
-            try: sent = self.sock.send(music)
-            except socket.error, e:
-                if e.errno == errno.EWOULDBLOCK:
-                    pass
-                else:
-                    break
-                
-            music = (yield False)   
-        yield True
+        self.sock.write_string("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: %s\r\n\r\n" % len(page))
+        self.sock.write_string(page)
         
 
 
 
-        
-class PlayerServer(object):
-    def __init__(self, pandora_account):
-        self.pandora_account = pandora_account
-        
-        
-        # load our previously-saved station
-        station = None
-        last_station = settings.get("last_station", None)
-        if last_station: station = pandora_account.stations.get(last_station, None)
-        # ...or play a random one
-        if not station:
-            station = choice(pandora_account.stations.values())
-            save_setting("last_station", station.id)
-        station.play()
-        
-        self.to_read = set([self.pandora_account])
-        self.to_write = set()
-        self.to_err = set()
-        self.callbacks = []
-        
 
-    def serve(self, port=7000):
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind(('', port))
-        server.listen(100)
-        server.setblocking(0)
-        
-        self.to_read.add(server)
-        last_music_read = time.time()
-        shared_data = {
-            "music_buffer": Queue(music_buffer_size),
-            "messages": []
-        }
+
+
+
+class SocketReactor(object):
+    def __init__(self, shared_data):
+        self.to_read = []
+        self.to_write = []
+        self.to_err = []
+        self.shared_data = shared_data
         
         
+    def add(self, o, r=True, w=False):
+        self.to_err.append(o)
+        if r: self.to_read.append(o)
+        if w: self.to_write.append(o)
+
+
+    def run(self):
         while True:
             read, write, err = select.select(
                 self.to_read,
@@ -1493,24 +1492,40 @@ class PlayerServer(object):
             )
             
             for sock in read:
-                if sock is server:
-                    conn, addr = server.accept()
-                    conn.setblocking(0)
-                    
-                    conn = WebConnection(MagicSocket(sock=conn), addr[0], self.pandora_account)
-                    self.to_read.add(conn)
-                    self.to_err.add(conn)
-                    
-                else:
-                     sock.handle_read(self.to_read, self.to_write, self.to_err, shared_data)                    
-                    
-                    
+                sock.handle_read(self.to_read, self.to_write, self.to_err, self.shared_data)
+            
             for sock in write:
-                sock.handle_write(self.to_read, self.to_write, self.to_err, shared_data)
+                sock.handle_write(self.to_read, self.to_write, self.to_err, self.shared_data)
+            
+            for sock in err:
+                raise
 
-
-            for cb in self.callbacks: cb()
             time.sleep(.01)
+            
+
+
+
+        
+class WebServer(object):
+    def __init__(self, port=7000):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind(('', port))
+        self.sock.listen(100)
+        self.sock.setblocking(0)
+        
+        
+    def handle_read(self, read, write, err, shared_data):
+        conn, addr = self.sock.accept()
+        conn.setblocking(0)
+        
+        conn = WebConnection(MagicSocket(sock=conn), addr[0])
+        read.add(conn)
+        err.add(conn)
+        
+        
+    def fileno(self):
+        return self.sock.fileno()
             
             
             
@@ -1597,8 +1612,23 @@ if __name__ == "__main__":
         lh.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
         debug_logger.addHandler(lh)
 
-    account = Account(options.user, options.password, debug=options.debug)
-    server = PlayerServer(account)
+
+    
+    
+    pandora_account = Account(options.user, options.password, debug=options.debug)
+    web_server = WebServer()
+    
+
+    reactor = SocketReactor({
+        "music_buffer": Queue(music_buffer_size),
+        "long_pollers": [],
+        "message": None,
+        "pandora_account": pandora_account
+    })
+    
+    reactor.add(pandora_account)
+    reactor.add(web_server)
+    
     
     webopen("http://localhost:7000")
-    server.serve()
+    reactor.run()
