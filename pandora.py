@@ -38,7 +38,7 @@ except ImportError: from cgi import parse_qsl, parse_qs
 
 THIS_DIR = dirname(abspath(__file__))
 music_buffer_size = 20
-
+import_export_html_filename = "index.html"
 
 
 
@@ -46,9 +46,9 @@ music_buffer_size = 20
 settings = {
     'username': None,
     'download_directory': '/tmp',
-    'download_music': False,
-    'volume': 60,
-    'last_station': None,
+    'download_music': True,
+    'volume': 23,
+    'last_station': '471566952271400827',
     'password': None,
 }
 
@@ -1485,9 +1485,6 @@ class WebConnection(object):
             
         self.writing = True
         
-        
-                   
-        
     def fileno(self):
         return self.sock.fileno()
     
@@ -1503,8 +1500,8 @@ class WebConnection(object):
 
     def serve_webpage(self):
         # do we use an overridden html page?
-        if exists(join(THIS_DIR, "index.html")):
-            with open("index.html", "r") as h: page = h.read()
+        if exists(join(THIS_DIR, import_export_html_filename)):
+            with open(import_export_html_filename, "r") as h: page = h.read()
         # or the embedded html page
         else: page = html_page
         
@@ -1519,6 +1516,9 @@ class WebConnection(object):
 
 
 class SocketReactor(object):
+    """ loops through all the readers and writers to see what sockets are ready
+    to be worked with """
+    
     def __init__(self, shared_data):
         self.to_read = set()
         self.to_write = set()
@@ -1600,7 +1600,10 @@ class SocketReactor(object):
 
         
 class WebServer(object):
-    def __init__(self, reactor, port=7000):
+    """ serves as the entry point for all requests, spawning a new
+    WebConnection for each request and letting them handle what to do"""
+    
+    def __init__(self, reactor, port):
         self.reactor = reactor
         self.reactor.add_reader(self)
         
@@ -1653,13 +1656,14 @@ if __name__ == "__main__":
     parser.add_option('-i', '--import', dest='import_html', action="store_true", default=False, help="Import index.html into pandora.py")
     parser.add_option('-e', '--export', dest='export_html', action="store_true", default=False, help="Export index.html from pandora.py")
     parser.add_option('-c', '--clean', dest='clean', action="store_true", default=False, help="Remove all account-specific details from the player")
+    parser.add_option('-l', '--listen_port', type="int", dest='port', default=7000, help="the port to serve on")
     parser.add_option('-d', '--debug', dest='debug', action="store_true", default=False, help='debug XML to/from Pandora')
     options, args = parser.parse_args()
     
     
     # we're importing html to be embedded
     if options.import_html:
-        html_file = join(THIS_DIR, "index.html")
+        html_file = join(THIS_DIR, import_export_html_filename)
         logging.info("importing html from %s", html_file)
         with open(html_file, "r") as h: html = h.read()
         html = b64encode(zlib.compress(html, 9))
@@ -1689,7 +1693,7 @@ if __name__ == "__main__":
         
     # we're exporting the embedded html into index.html
     if options.export_html:    
-        html_file = join(THIS_DIR, "index.html")
+        html_file = join(THIS_DIR, import_export_html_filename)
         if exists(html_file):
             logging.error("\n\n*** html NOT exported, %s already exists! ***\n\n", html_file)
             exit()
@@ -1698,11 +1702,21 @@ if __name__ == "__main__":
         exit()
         
         
+    # cleaning up pandora.py for sharing
     if options.clean:
         logging.info("cleaning %s", __file__)
-        save_setting(username=None, password=None, last_station=None, volume=60)
+        save_setting(**{
+            "username": None,
+            "password": None,
+            "last_station": None,
+            "volume": 60,
+            "download_music": False
+        })
         exit()
         
+
+
+
 
     if not options.password or not options.user:
         parser.error("Please provide your username and password with -u and -p")
@@ -1716,7 +1730,10 @@ if __name__ == "__main__":
 
 
     
-    
+    # this is data shared between every socket-like object in the select
+    # reactor.  for example, the socket that streams music to the browser
+    # uses the "music_buffer" key to read from, while the socket that reads
+    # music from pandora uses this same key to dump to
     shared_data = {
         "music_buffer": Queue(music_buffer_size),
         "long_pollers": [],
@@ -1725,8 +1742,8 @@ if __name__ == "__main__":
 
     reactor = SocketReactor(shared_data)
     
-    server = WebServer(reactor)
+    server = WebServer(reactor, options.port)
     pandora_account = Account(reactor, options.user, options.password, debug=options.debug)    
     
-    #webopen("http://localhost:7000")
+    webopen("http://localhost:%d" % options.port)
     reactor.run()
