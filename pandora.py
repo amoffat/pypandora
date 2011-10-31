@@ -46,9 +46,9 @@ import_export_html_filename = "index.html"
 settings = {
     'username': None,
     'download_directory': '/tmp',
-    'download_music': True,
-    'volume': 23,
-    'last_station': '471566952271400827',
+    'download_music': False,
+    'volume': 60,
+    'last_station': None,
     'password': None,
 }
 
@@ -83,6 +83,9 @@ def save_setting(**kwargs):
 
 
 
+
+
+class LoginFail(Exception): pass
 
 
 class Connection(object):
@@ -314,7 +317,7 @@ class Account(object):
             else:
                 self.log.error("failed login (this happens quite a bit), trying again...")
                 time.sleep(1)
-        if not logged_in: raise Exception, "can't log in.  wrong username or password?"
+        if not logged_in: raise LoginFail, "can't log in.  wrong username or password?"
         self.log.info("logged in")
         
     @property
@@ -668,7 +671,7 @@ class Song(object):
             if shared_data["music_buffer"].full(): return
             
             # check if it's time to read more music yet.  preload the
-            # first 128k quickly so songs play immediately
+            # first N kilobytes quickly so songs play immediately
             now = time.time()
             if now - self.last_read < self.sleep_amt and\
                 self.download_progress > Song.kb_to_quick_stream * 1024: return
@@ -1408,6 +1411,8 @@ class WebConnection(object):
     
     
     def handle_write(self, shared_data, reactor):
+        pandora = shared_data.get("pandora_account", None)
+        
         # have we already begun writing and must flush out what's in the write
         # buffer?
         if self.writing:
@@ -1440,26 +1445,51 @@ class WebConnection(object):
         # long-polling requests
         elif self.path == "/events":
             shared_data["long_pollers"].append(self)
+            
+        elif self.path == "/connection_info":
+            logged_in = bool(pandora)
+            self.send_json({"logged_in": logged_in})
         
         # gets things like last volume, last station, and station list    
         elif self.path == "/account_info":
-            self.send_json(shared_data["pandora_account"].json_data)
+            if pandora: self.send_json(pandora.json_data)
+            else: pass
             
         # what's currently playing
         elif self.path == "/current_song_info":
-            self.send_json(shared_data["pandora_account"].current_song.json_data)
+            self.send_json(pandora.current_song.json_data)
            
         # perform some action on the music player
         elif self.path.startswith("/control/"):            
             command = self.path.replace("/control/", "")
             if command == "next_song":
                 shared_data["music_buffer"] = Queue(music_buffer_size)
-                shared_data["pandora_account"].next()
+                pandora.next()
+                self.send_json({"status": True})
+                
+            elif command == "login":
+                username = self.params["username"]
+                password = self.params["password"]
+                
+                success = True
+                try: pandora_account = Account(reactor, username, password)
+                except LoginFail: success = False 
+                
+                if success:
+                    try: remember = bool(int(self.params["remember_login"]))
+                    except: remember = False
+                    if remember: save_setting(username=username, password=password)
+                    shared_data["pandora_account"] = pandora_account
+                
+                self.send_json({"status": success})
+                
                 
             elif command == "change_station":
                 station_id = self.params["station_id"];
-                station = shared_data["pandora_account"].play(station_id)
+                station = pandora.play(station_id)
                 save_setting(last_station=station_id)
+                
+                self.send_json({"status": True})
                 
             elif command == "volume":
                 self.log.info("changing volume")
@@ -1467,7 +1497,7 @@ class WebConnection(object):
                 except: level = 60
                 save_setting(volume=level)
             
-            self.send_json({"status": True})
+                self.send_json({"status": True})
            
         # this request is special in that it should never close after writing
         # because it's a stream
@@ -1651,12 +1681,10 @@ if __name__ == "__main__":
 
 
     parser = OptionParser(usage=("%prog [options]"))
-    parser.add_option('-u', "--username", dest="user", help="your Pandora username (your email)")
-    parser.add_option('-p', '--password', dest='password', help='your Pandora password')
     parser.add_option('-i', '--import', dest='import_html', action="store_true", default=False, help="Import index.html into pandora.py")
     parser.add_option('-e', '--export', dest='export_html', action="store_true", default=False, help="Export index.html from pandora.py")
     parser.add_option('-c', '--clean', dest='clean', action="store_true", default=False, help="Remove all account-specific details from the player")
-    parser.add_option('-l', '--listen_port', type="int", dest='port', default=7000, help="the port to serve on")
+    parser.add_option('-p', '--port', type="int", dest='port', default=7000, help="the port to serve on")
     parser.add_option('-d', '--debug', dest='debug', action="store_true", default=False, help='debug XML to/from Pandora')
     options, args = parser.parse_args()
     
@@ -1715,12 +1743,6 @@ if __name__ == "__main__":
         exit()
         
 
-
-
-
-    if not options.password or not options.user:
-        parser.error("Please provide your username and password with -u and -p")
-
     if options.debug:
         debug_logger = logging.getLogger("debug_logger")
         debug_logger.setLevel(logging.DEBUG)
@@ -1738,12 +1760,17 @@ if __name__ == "__main__":
         "music_buffer": Queue(music_buffer_size),
         "long_pollers": [],
         "message": None,
+        "pandora_account": None
     }
 
     reactor = SocketReactor(shared_data)
+    WebServer(reactor, options.port)
     
-    server = WebServer(reactor, options.port)
-    pandora_account = Account(reactor, options.user, options.password, debug=options.debug)    
+    # do we have saved login settings?
+    username = settings.get("username")
+    password = settings.get("password")
+    if username and password: Account(reactor, username, password)
+    
     
     webopen("http://localhost:%d" % options.port)
     reactor.run()

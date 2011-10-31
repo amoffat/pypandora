@@ -29,7 +29,7 @@
 				height:500px;
 			}
 			
-			#overlay {
+			#overlay, #login_container {
 				background-color:rgba(0,0,0,.9);
 				display:none;
 				text-align:center;
@@ -47,6 +47,39 @@
 				box-shadow: 0px 0px 20px 0px rgba(0, 0, 0, 1);
 				font-family:monospace;
 			}
+			
+			#login_form {
+				z-index:40;
+				position:absolute;
+				width:500px;
+				height:500px;
+				color:white;
+			}
+			
+			#login_container {
+				line-height:normal;
+				padding:20px;
+				width:250px;
+				position:relative;
+				text-align:left;
+				font-family:sans-serif;
+			}
+			
+			#login_form input[type=text], #login_form input[type=password] {
+				font-size:16px;
+				width:244px;
+				border:0;
+				padding:3px;
+				margin-bottom:4px;
+			}
+			
+			#login_button {
+				position:absolute;
+				bottom:20px;
+				right:20px;
+				cursor:pointer;
+			}
+			
 			
 			html {
 				background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACEAAAAkCAMAAAAw96PuAAAAMFBMVEUbGxsaGhoiIiIcHBwVFRUYGBggICAeHh4WFhYfHx8XFxcUFBQdHR0ZGRkhISESEhKy7ZvJAAABQUlEQVR42l1TUZLFIAiDRQpS3Xf/2+6Ugjw2X6nTxMgEAPxJ0IAXzFeeCcKFCoHJ9pKbKI5wCNBUjE+S4dR4pkhRABbcEBDUV5cWW6ebG597FF9dYMBy80zofq4LsM1MWGGNXRcWizJhhaXbKuaWr4QJ28UfiwDveQUIsbjBGcta9AJYwCgwt7b7ckKiDP/yoZ4JsU5YNCqf0zYhWs+L7fyiHLqA+UtpjXi8+4XOgfG8Suh+bUJBM6H7gYGdCclJeGsAGaimJXm/8VUThAtGr0cWJGmrR5i0gkirh8AIXRWkFTj87kdXlY4CVz1S1yotbSFC1xNPhQQNphOzEq+vjmFxXZAw/K0t/OKW+foK9QWr+2qF2oLto6sJ9QUbVaxaoV4Pdp30FaJWj9RVpavATrfCx3U9seiuhQBGPZBTYC38AccDDZOEuQAKAAAAAElFTkSuQmCC);
@@ -265,12 +298,20 @@
 				
 		        <div id="album_art_container">
 		        	<div id="overlay"></div>
+		        	<div id="login_form">
+		        		<div id="login_container">
+		        			<input id="username" type="text" name="username" placeholder="username" />
+		        			<input id="password" type="password" name="password" placeholder="password" />
+		        			<input id="remember_login" type="checkbox" name="remember" value="1" /> remember login?
+		        			<input id="login_button" type="button" value="Login" />
+		        		</div>
+		        	</div>
 		        	<div class="album_art" id="current_album_art" style="z-index:20; background-color:rgba(0,0,0,.7);"></div>
 		        	<div class="album_art" id="next_album_art" style="z-index:10; background-color:transparent">No Image</div>
 		        </div>
 	        </div>
 	        
-	        <div id="footer" style="padding-top:15px;">
+	        <div id="footer" style="padding-top:15px; display:none;">
 		        <div style="float:left;">
 		        	Stations <select id="stations" style="margin-left:20px;"></select>
 		        </div>
@@ -297,6 +338,7 @@
         	var current_station = null;
         	var overlay_interval = null;
         	var player_ready = false;
+        	var initial_volume_set = true;
         
         	function long_poll() {
         		$.get("/events", function(data) {
@@ -310,6 +352,7 @@
         	
         	function song_info() {
         		$.get("/current_song_info", function(data) {
+        			$("#footer").show();
         			$("#header").show();
         			$("#volume_container").show();
         			$("#controls").show();
@@ -396,6 +439,15 @@
         		text = text.replace(cur_spin, next_spin);
         		$("#overlay").text(text);
         	}
+        	
+        	function login_show() {
+        		$("#login_container").fadeIn("fast");
+        	}
+        	
+        	function login_hide() {
+        		$("#login_container").fadeOut("fast");
+        	}
+        	
         	function overlay_show(msg) {
         		$("#overlay").text(msg + " |").fadeIn("fast");
         		clearInterval(overlay_interval);
@@ -433,13 +485,18 @@
         		});
         	}
         	
+        	function center(selector) {
+        		$(selector).css({
+        			position:"absolute",
+        			left: (500 - $(selector).outerWidth())/2,
+        			top: (500 - $(selector).outerHeight())/2,
+        		});
+        	}
+        	
         	
         	$(function() {      
-        		$("#overlay").css({
-        			position:"absolute",
-        			left: (500 - $("#overlay").outerWidth())/2,
-        			top: (500 - $("#overlay").outerHeight())/2,
-        		});
+        		center("#overlay");
+        		center("#login_container");
         		
         		$(window).resize(function(){
 					$('#main_container').css({
@@ -473,8 +530,18 @@
         		});
         		
         		
-        		
-
+        		$("#login_button").click(function() {
+        			var u = $("#username").val();
+        			var p = $("#password").val();
+        			var r = $("#remember_login:checked").val();
+        			if (typeof(r) == "undefined") {r = 0;}
+        			
+        			control("login", {
+        				username: u,
+        				password: p,
+        				remember_login: r
+					});
+        		});
         		
         		$("#next").click(change_song);        		
         		$("#like").click(song_info);
@@ -503,10 +570,20 @@
         				*/
         			},
         			change: function(event, ui) {
+        				if (initial_volume_set) {
+        					initial_volume_set = false;
+        					return;
+        				}
+        				
         				control("volume", {level: ui.value});
         			}
         		});
-        		overlay_show("Buffering");
+        		
+        		
+        		$.get("/connection_info", function(data) {
+        			if (data.logged_in) {overlay_show("Buffering");}
+        			else {login_show();}
+        		});
         		
         		//long_poll();
         	});
