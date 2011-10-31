@@ -78,6 +78,8 @@
 				bottom:20px;
 				right:20px;
 				cursor:pointer;
+				font-family:monospace;
+				font-weight:bold;
 			}
 			
 			
@@ -300,8 +302,8 @@
 		        	<div id="overlay"></div>
 		        	<div id="login_form">
 		        		<div id="login_container">
-		        			<input id="username" type="text" name="username" placeholder="username" />
-		        			<input id="password" type="password" name="password" placeholder="password" />
+		        			<input id="username" type="text" name="username" placeholder="username" value="pandora.login@email.com" />
+		        			<input id="password" type="password" name="password" placeholder="password" value="password" />
 		        			<input id="remember_login" type="checkbox" name="remember" value="1" /> remember login?
 		        			<input id="login_button" type="button" value="Login" />
 		        		</div>
@@ -440,21 +442,21 @@
         		$("#overlay").text(text);
         	}
         	
-        	function login_show() {
-        		$("#login_container").fadeIn("fast");
+        	function login_show(cb) {
+        		$("#login_container").fadeIn("fast", cb);
         	}
         	
-        	function login_hide() {
-        		$("#login_container").fadeOut("fast");
+        	function login_hide(cb) {
+        		$("#login_container").fadeOut("fast", cb);
         	}
         	
-        	function overlay_show(msg) {
-        		$("#overlay").text(msg + " |").fadeIn("fast");
+        	function overlay_show(msg, cb) {
+        		$("#overlay").text(msg + " |").fadeIn("fast", cb);
         		clearInterval(overlay_interval);
         		overlay_interval = setInterval(update_overlay, 100);
         	}
-        	function overlay_hide() {
-        		$("#overlay").fadeOut("fast");
+        	function overlay_hide(cb) {
+        		$("#overlay").fadeOut("fast", cb);
         		clearInterval(overlay_interval);
         	}
         	
@@ -536,11 +538,29 @@
         			var r = $("#remember_login:checked").val();
         			if (typeof(r) == "undefined") {r = 0;}
         			
+        			login_hide(function() {
+        				overlay_show("Logging in");
+        			});
+        			
         			control("login", {
         				username: u,
         				password: p,
         				remember_login: r
+					}, function(data) {
+						if (data.status) {
+							overlay_hide(function() {
+								overlay_show("Buffering");
+							});
+						}
+						else {
+							overlay_hide(function() {
+								alert("Login failed.  Please check your username and password.");
+								login_show();
+							});
+						}
 					});
+        			
+        			
         		});
         		
         		$("#next").click(change_song);        		
@@ -558,7 +578,7 @@
         			range: "min",
         			min: 0,
         			max: 100,
-        			value: 0,
+        			value: 60,
         			animate: false,
         			slide: function(event, ui) {
         				clearTimeout(fade_volume_overlay);
