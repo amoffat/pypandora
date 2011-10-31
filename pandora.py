@@ -44,23 +44,25 @@ music_buffer_size = 20
 
 # settings
 settings = {
-    'volume': '6',
-    'download_music': False,
+    'username': None,
     'download_directory': '/tmp',
-    'last_station': '538255089865019259',
+    'download_music': False,
+    'volume': 60,
+    'last_station': None,
+    'password': None,
 }
 
 
 
 
-def save_setting(key, value):
+def save_setting(**kwargs):
     """ saves a value persisitently *in the file itself* so that it can be
     used next time pypandora is fired up.  of course there are better ways
     of storing values persistently, but i want to stick with the '1 file'
     idea """
     global settings
     
-    logging.info("saving value %r to %r", value, key)
+    logging.info("saving values %r", kwargs)
     with open(abspath(__file__), "r") as h: lines = h.read()
     
     
@@ -69,7 +71,7 @@ def save_setting(key, value):
     
     chunks = [lines[:start], "", lines[end:]]
     
-    settings[key] = value
+    settings.update(kwargs)
     new_settings = "settings = {\n"
     for k,v in settings.iteritems(): new_settings += "    %r: %r,\n" % (k, v)
     new_settings += "}\n"
@@ -283,7 +285,7 @@ class Account(object):
         # ...or play a random one
         if not station_id:
             station_id = choice(self.stations.keys())
-            save_setting("last_station", station_id)
+            save_setting(last_station=station_id)
             
         self.play(station_id)
         
@@ -375,7 +377,7 @@ class Station(object):
         self.current_song = None
         self._playlist = []
         
-        self.log = logging.getLogger(repr(self))
+        self.log = logging.getLogger(repr(self).encode("ascii", "ignore"))
 
     def like(self):
         # normally we might do some logging here, but we let the song object
@@ -534,7 +536,7 @@ class Song(object):
         self.filename = join(settings["download_directory"], "%s-%s.mp3" % (format_title(self.artist), format_title(self.title)))
         
         # FIXME: bug if the song has weird characters
-        self.log = logging.getLogger(repr(self))
+        self.log = logging.getLogger(repr(self).encode("ascii", "ignore"))
         
         
         
@@ -1223,6 +1225,11 @@ html_page = zlib.decompress(b64decode(html_page.replace("\n", "")))
 
 
 class MagicSocket(object):
+    """ a socket wrapper that allows for the non-blocking reads and writes.
+    the read methods include the ability to read up to a delimiter (like the
+    end of http headers) as well as reading a specified amount (like reading
+    the body of an http request) """
+    
     # statuses
     DONE = 0
     BLOCKING = 1
@@ -1330,6 +1337,7 @@ class MagicSocket(object):
         return False 
     
     def __getattr__(self, name):
+        """ passes any non-existant methods down to the underlying socket """
         return getattr(self.sock, name)
 
 
@@ -1451,12 +1459,13 @@ class WebConnection(object):
             elif command == "change_station":
                 station_id = self.params["station_id"];
                 station = shared_data["pandora_account"].play(station_id)
-                save_setting("last_station", station_id)
+                save_setting(last_station=station_id)
                 
             elif command == "volume":
                 self.log.info("changing volume")
-                level = self.params["level"]
-                save_setting("volume", level)
+                try: level = int(self.params["level"])
+                except: level = 60
+                save_setting(volume=level)
             
             self.send_json({"status": True})
            
@@ -1643,6 +1652,7 @@ if __name__ == "__main__":
     parser.add_option('-p', '--password', dest='password', help='your Pandora password')
     parser.add_option('-i', '--import', dest='import_html', action="store_true", default=False, help="Import index.html into pandora.py")
     parser.add_option('-e', '--export', dest='export_html', action="store_true", default=False, help="Export index.html from pandora.py")
+    parser.add_option('-c', '--clean', dest='clean', action="store_true", default=False, help="Remove all account-specific details from the player")
     parser.add_option('-d', '--debug', dest='debug', action="store_true", default=False, help='debug XML to/from Pandora')
     options, args = parser.parse_args()
     
@@ -1685,6 +1695,12 @@ if __name__ == "__main__":
             exit()
         logging.info("exporting html to %s", html_file)
         with open(html_file, "w") as h: h.write(html_page)
+        exit()
+        
+        
+    if options.clean:
+        logging.info("cleaning %s", __file__)
+        save_setting(username=None, password=None, last_station=None, volume=60)
         exit()
         
 
