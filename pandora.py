@@ -48,6 +48,7 @@ settings = {
     'download_directory': '/tmp',
     'download_music': False,
     'volume': 60,
+    'tag_mp3s': False,
     'last_station': None,
     'password': None,
 }
@@ -286,7 +287,7 @@ class Account(object):
         station_id = settings.get("last_station", None)
         
         # ...or play a random one
-        if not station_id:
+        if not station_id or station_id not in self.stations:
             station_id = choice(self.stations.keys())
             save_setting(last_station=station_id)
             
@@ -524,7 +525,7 @@ class Song(object):
 
         self.url = self._decrypt_url(self.audioURL)
         self.duration = 0
-        self.song_size = None
+        self.song_size = 0
         self.download_progress = 0
         self.last_read = 0
         self.state = Song.INITIALIZED
@@ -622,12 +623,19 @@ class Song(object):
         self.sock.write_string(req % (path, host, self.download_progress))
         self.state = Song.SENDING_REQUEST
         
+        # if we're reconnecting, we might be in a state of being in the readers
+        # and not the writers, so let's just ensure that we're where we need
+        # to be
+        self.reactor.remove_reader(self)
+        self.reactor.add_writer(self)
+        
         
     def handle_write(self, shared, reactor):
         if self.state is Song.SENDING_REQUEST:
             done = self.sock.write()
             if done:
-                self.reactor.flip(self)
+                self.reactor.remove_writer(self)
+                self.reactor.add_reader(self)
                 self.state = Song.READING_HEADERS
                 self.sock.read_until("\r\n\r\n")
             return
@@ -644,31 +652,31 @@ class Song(object):
                 headers = headers.strip().split("\r\n")
                 headers = dict([h.split(": ") for h in headers[1:]])
                 
-                # figure out how fast we should download and how long we need to sleep
-                # in between reads.  we have to do this so as to not stream to quickly
-                # from pandora's servers.  we lower it by 20% so we never suffer from
-                # a buffer underrun       
-                bytes_per_second = self.bitrate * 125.0
-                self.sleep_amt = Song.read_chunk_size * .8 / bytes_per_second
+                #print headers
                 
-                # determine the size of the song, and from that, how long the
-                # song is in seconds
-                self.song_size = int(headers["Content-Length"])
-                self.duration = self.song_size / bytes_per_second
+                # if we don't have a song size it means we're not doing
+                # a reconnect, because if we were, we don't need to do
+                # anything in this block
+                if not self.song_size:
+                    # figure out how fast we should download and how long we need to sleep
+                    # in between reads.  we have to do this so as to not stream to quickly
+                    # from pandora's servers.  we lower it by 20% so we never suffer from
+                    # a buffer underrun
+                    bytes_per_second = self.bitrate * 125.0
+                    self.sleep_amt = Song.read_chunk_size * .8 / bytes_per_second
+                    
+                    # determine the size of the song, and from that, how long the
+                    # song is in seconds
+                    self.song_size = int(headers["Content-Length"])
+                    self.duration = self.song_size / bytes_per_second
+                    self.started_streaming = time.time()
+                    self._mp3_data = []
                 
                 self.state = Song.STREAMING
                 self.sock.read_amount(self.song_size - self.download_progress)
-                self.started_streaming = time.time()
-                self._mp3_data = []
             return
 
-        elif self.state is Song.STREAMING:
-            if self.done_downloading:
-                self.state = Song.DONE
-                self.reactor.remove_reader(self)
-                return
-            
-            
+        elif self.state is Song.STREAMING:            
             # can we even put anything new on the music buffer?
             if shared_data["music_buffer"].full(): return
             
@@ -696,6 +704,7 @@ class Song(object):
                     self.log.error("disconnected, reconnecting at byte %d of %d", self.download_progress, self.song_size)
                     self.connect()
                     return
+                
                 # done!
                 else:
                     self.status = Song.DONE
@@ -708,18 +717,21 @@ class Song(object):
                         # save on memory
                         self._mp3_data = []
                         
-                        # tag the mp3
-                        tag = ID3Tag()
-                        tag.add_id(self.id)
-                        tag.add_title(self.title)
-                        tag.add_album(self.album)
-                        tag.add_artist(self.artist)
-                        # can't get this working...
-                        #tag.add_image(self.album_art)
+                        if settings["tag_mp3s"]:
+                            # tag the mp3
+                            tag = ID3Tag()
+                            tag.add_id(self.id)
+                            tag.add_title(self.title)
+                            tag.add_album(self.album)
+                            tag.add_artist(self.artist)
+                            # can't get this working...
+                            #tag.add_image(self.album_art)
+                            
+                            mp3_data = tag.binary() + mp3_data
                 
                         # and write it to the file
                         h = open(self.filename, "w")
-                        h.write(tag.binary() + mp3_data)
+                        h.write(mp3_data)
                         h.close()
                     
                 
@@ -1259,6 +1271,7 @@ class MagicSocket(object):
         self._read_delim = ""
         self._read_amount = 0
         self._delim_cursor = 0
+        self._first_read = True
         
         # use an existing socket.  useful for connection sockets created from
         # a server socket
@@ -1275,12 +1288,15 @@ class MagicSocket(object):
     
     def read_until(self, delim, include_last=True):
         self._read_amount = 0
+        self._delim_cursor = 0
         self._read_delim = delim
         self.include_last = include_last
+        self._first_read = True
         
     def read_amount(self, amount):
         self._read_delim = ""
         self._read_amount = amount
+        self._first_read = True
     
     
     def _read_chunk(self, size):
@@ -1294,6 +1310,17 @@ class MagicSocket(object):
         chunk = self._read_chunk(size)
         if chunk is None: return MagicSocket.BLOCKING, ""
         
+        # this is necessary for the case where we've overread some bytes
+        # in the process of reading an amount (or up to a delimiter), and
+        # we've stored those extra bytes on the read_buffer.  we don't
+        # want to discard those bytes, but we DO want them to want them to
+        # be returned as part of the chunk, in the case that we're streaming
+        # chunks
+        if self._first_read and self.read_buffer:
+            chunk = self.read_buffer + chunk
+            self.read_buffer = ""
+            self._first_read = False
+             
         self.read_buffer += chunk
         
         # do we have a delimiter we're waiting for?
@@ -1329,7 +1356,7 @@ class MagicSocket(object):
                 if only_chunks: return MagicSocket.DONE, chunk
                 else: return MagicSocket.DONE, self.read_buffer[:self._read_amount]
             finally:
-                self.read_buffer =  self.read_buffer[self._read_amount:]
+                self.read_buffer = self.read_buffer[self._read_amount:]
                 self._read_amount = 0
                 
         return MagicSocket.NOT_DONE, chunk
@@ -1569,21 +1596,6 @@ class SocketReactor(object):
         self.shared_data = shared_data
         self.log = logging.getLogger("socket reactor")
         
-        
-    def flip(self, o):
-        """ changes a select-compatible object from the set of readers to the
-        set of writers or vice versa """
-        if o in self.to_read and o in self.to_write:
-            raise Exception, "can't flip an object that's in both to_read and to_write"
-        elif o not in self.to_read and o not in self.to_write:
-            raise Exception, "can't flip an object that's in neither to_read nor to_write"
-        elif o in self.to_read:
-            self.remove_reader(o)
-            self.add_writer(o)
-        else:
-            self.remove_writer(o)
-            self.add_reader(o)
-            
             
     def add_callback(self, fn):
         self.callbacks.add(fn)
