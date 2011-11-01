@@ -44,13 +44,13 @@ import_export_html_filename = "index.html"
 
 # settings
 settings = {
-    'username': None,
+    'username': 'andrew.moffat@medtelligent.com',
     'download_directory': '/tmp',
     'download_music': False,
     'volume': 60,
     'tag_mp3s': False,
-    'last_station': None,
-    'password': None,
+    'last_station': '338130131060127572',
+    'password': 'lL1nRMx8yc',
 }
 
 
@@ -468,7 +468,7 @@ class Station(object):
 
 
 class Song(object):
-    bitrate = 128
+    assume_bitrate = 128
     read_chunk_size = 1024
     kb_to_quick_stream = 256
     
@@ -478,20 +478,6 @@ class Song(object):
     READING_HEADERS = 2
     STREAMING = 3
     DONE = 4
-    
-    
-    # byte value: bitrate
-    # these are used to figure out the bitrate of the mp3 file.  the 3rd byte
-    # in an mp3 frame contains the bitrate info.  we can extract it by &'ing
-    # with 240, then mapping it onto this dict
-    bitrates = {
-        144: 128,
-        160: 160,
-        176: 192,
-        192: 224,
-        208: 256,
-        224: 320
-    }
     
 
     def __init__(self, station, **kwargs):
@@ -540,6 +526,7 @@ class Song(object):
         self.state = Song.INITIALIZED
         self.started_streaming = None
         self.sock = None
+        self.bitrate = None
 
         def format_title(part):
             part = part.lower()
@@ -639,6 +626,29 @@ class Song(object):
         self.reactor.add_writer(self)
         
         
+        
+    def _calc_bitrate(self, chunk):
+        bitrate_lookup = {
+            144: 128,
+            160: 160,
+            176: 192,
+            192: 224,
+            208: 256,
+            224: 320
+        }
+    
+        for i in xrange(0, len(chunk), 2):
+            c = chunk[i:i+2]
+            c = struct.unpack(">H", c)[0]
+            
+            if c & 65504:
+                bitrate_byte = ord(chunk[i+2])
+                try: return bitrate_lookup[bitrate_byte & 240]
+                except KeyError: return None
+        
+        return None
+        
+        
     def handle_write(self, shared, reactor):
         if self.state is Song.SENDING_REQUEST:
             done = self.sock.write()
@@ -670,8 +680,13 @@ class Song(object):
                     # figure out how fast we should download and how long we need to sleep
                     # in between reads.  we have to do this so as to not stream to quickly
                     # from pandora's servers.  we lower it by 20% so we never suffer from
-                    # a buffer underrun
-                    bytes_per_second = self.bitrate * 125.0
+                    # a buffer underrun.
+                    #
+                    # these values aren't necessarily correct, but we can't know that
+                    # until we get some mp3 data, from which we'll calculate the actual
+                    # bitrate, then the dependent values.  but for now, using
+                    # Song.assume_bitrate is fine.
+                    bytes_per_second = Song.assume_bitrate * 125.0
                     self.sleep_amt = Song.read_chunk_size * .8 / bytes_per_second
                     
                     # determine the size of the song, and from that, how long the
@@ -702,6 +717,21 @@ class Song(object):
             
                 
             if chunk:
+                # calculate the actual bitrate from the mp3 stream data
+                if not self.bitrate:
+                    self.log.debug("looking for bitrate...")
+                    self.bitrate = self._calc_bitrate(chunk)
+                    
+                    # now that we have the actual bitrate, let's recalculate the song
+                    # duration and how fast we should download the mp3 stream
+                    if self.bitrate:
+                        self.log.debug("found bitrate %d", self.bitrate)
+                        
+                        bytes_per_second = self.bitrate * 125.0
+                        self.sleep_amt = Song.read_chunk_size * .8 / bytes_per_second
+                        self.duration = self.song_size / bytes_per_second
+                    
+                    
                 self.download_progress += len(chunk)
                 self._mp3_data.append(chunk)
                 shared_data["music_buffer"].put(chunk)
