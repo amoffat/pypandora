@@ -47,9 +47,9 @@ settings = {
     'username': 'andrew.moffat@medtelligent.com',
     'download_directory': '/tmp',
     'download_music': False,
-    'volume': 60,
+    'volume': 47,
     'tag_mp3s': False,
-    'last_station': '338130131060127572',
+    'last_station': '539705826868328276',
     'password': 'lL1nRMx8yc',
 }
 
@@ -461,9 +461,6 @@ class Station(object):
     def __repr__(self):
         return "<Station %s: \"%s\">" % (self.id, self.name)
 
-    def __str__(self):
-        return "%s" % self.name
-
 
 
 
@@ -628,6 +625,9 @@ class Song(object):
         
         
     def _calc_bitrate(self, chunk):
+        """ takes a chunk of mp3 data, finds the sync frame in the header
+        then filters out the bitrate (if it can be found) """
+        
         bitrate_lookup = {
             144: 128,
             160: 160,
@@ -906,7 +906,7 @@ class ID3Tag(object):
 
 
 def encrypt(input):
-    """ encrypts data to be sent to pandora. """
+    """ encrypts data to be sent to pandora """
     block_n = len(input) / 8 + 1
     block_input = input
     
@@ -968,7 +968,7 @@ def encrypt(input):
 
 
 def decrypt(input):
-    """ decrypts data sent from pandora. """
+    """ decrypts data sent from pandora """
     output = []
     
     for i in xrange(0, len(input), 16):
