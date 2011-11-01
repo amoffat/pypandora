@@ -78,8 +78,6 @@
 				bottom:20px;
 				right:20px;
 				cursor:pointer;
-				font-family:monospace;
-				font-weight:bold;
 			}
 			
 			
@@ -302,7 +300,7 @@
 		        	<div id="overlay"></div>
 		        	<div id="login_form">
 		        		<div id="login_container">
-		        			<input id="username" type="text" name="username" placeholder="username" value="pandora.login@email.com" />
+		        			<input id="username" type="text" name="username" placeholder="username" value="username" />
 		        			<input id="password" type="password" name="password" placeholder="password" value="password" />
 		        			<input id="remember_login" type="checkbox" name="remember" value="1" /> remember login?
 		        			<input id="login_button" type="button" value="Login" />
@@ -554,7 +552,7 @@
 						}
 						else {
 							overlay_hide(function() {
-								alert("Login failed.  Please check your username and password.");
+								alert("Login failed.  Please make sure your Pandora username and password are correct.");
 								login_show();
 							});
 						}

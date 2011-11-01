@@ -121,8 +121,7 @@ vFEIu76TsFMjK7V+Ynv8pCIccpwpk2idDhcKn7L10VxnXrjwMiN8PUINoXbPiFr2cSpUenNEqPYPgv0g
 HD7eAIijTD8="""
     }
 
-    def __init__(self, debug=False):
-        self.debug = debug
+    def __init__(self):
         self.rid = "%07dP" % (time.time() % 10000000) # route id
         self.timeoffset = time.time()
         self.token = None
@@ -170,9 +169,7 @@ HD7eAIijTD8="""
         self.log.debug("talking to %s", url)
 
         # debug logging?
-        if self.debug:
-            debug_logger = logging.getLogger("debug_logger")
-            debug_logger.debug("sending data %s" % self.dump_xml(body))
+        self.log.debug("sending data %s" % self.dump_xml(body))
 
         body = encrypt(body)
         conn.request("POST", url, body, headers)
@@ -183,9 +180,7 @@ HD7eAIijTD8="""
         ret_data = resp.read()
 
         # debug logging?
-        if self.debug:
-            debug_logger = logging.getLogger("debug_logger")
-            debug_logger.debug("returned data %s" % self.dump_xml(ret_data))
+        self.log.debug("returned data %s" % self.dump_xml(ret_data))
 
         conn.close()
 
@@ -256,12 +251,12 @@ HD7eAIijTD8="""
 
 
 class Account(object):
-    def __init__(self, reactor, email, password, debug=False):
+    def __init__(self, reactor, email, password):
         self.reactor = reactor
         self.reactor.shared_data["pandora_account"] = self
         
         self.log = logging.getLogger("account %s" % email)
-        self.connection = Connection(debug)        
+        self.connection = Connection()        
         self.email = email
         self.password = password
         self._stations = {}
@@ -383,7 +378,7 @@ class Station(object):
         self.current_song = None
         self._playlist = []
         
-        self.log = logging.getLogger(repr(self).encode("ascii", "ignore"))
+        self.log = logging.getLogger(str(self).encode("ascii", "ignore"))
 
     def like(self):
         # normally we might do some logging here, but we let the song object
@@ -484,6 +479,20 @@ class Song(object):
     STREAMING = 3
     DONE = 4
     
+    
+    # byte value: bitrate
+    # these are used to figure out the bitrate of the mp3 file.  the 3rd byte
+    # in an mp3 frame contains the bitrate info.  we can extract it by &'ing
+    # with 240, then mapping it onto this dict
+    bitrates = {
+        144: 128,
+        160: 160,
+        176: 192,
+        192: 224,
+        208: 256,
+        224: 320
+    }
+    
 
     def __init__(self, station, **kwargs):
         self.station = station
@@ -542,7 +551,7 @@ class Song(object):
         self.filename = join(settings["download_directory"], "%s-%s.mp3" % (format_title(self.artist), format_title(self.title)))
         
         # FIXME: bug if the song has weird characters
-        self.log = logging.getLogger(repr(self).encode("ascii", "ignore"))
+        self.log = logging.getLogger(str(self).encode("ascii", "ignore"))
         
         
         
@@ -1699,12 +1708,6 @@ class WebServer(object):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        format="(%(process)d) %(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        level=logging.INFO
-    )
-
-
     parser = OptionParser(usage=("%prog [options]"))
     parser.add_option('-i', '--import', dest='import_html', action="store_true", default=False, help="Import index.html into pandora.py")
     parser.add_option('-e', '--export', dest='export_html', action="store_true", default=False, help="Export index.html from pandora.py")
@@ -1712,6 +1715,15 @@ if __name__ == "__main__":
     parser.add_option('-p', '--port', type="int", dest='port', default=7000, help="the port to serve on")
     parser.add_option('-d', '--debug', dest='debug', action="store_true", default=False, help='debug XML to/from Pandora')
     options, args = parser.parse_args()
+    
+    
+    log_level = logging.INFO
+    if options.debug: log_level = logging.DEBUG
+    
+    logging.basicConfig(
+        format="(%(process)d) %(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        level=log_level
+    )
     
     
     # we're importing html to be embedded
@@ -1766,14 +1778,6 @@ if __name__ == "__main__":
             "download_music": False
         })
         exit()
-        
-
-    if options.debug:
-        debug_logger = logging.getLogger("debug_logger")
-        debug_logger.setLevel(logging.DEBUG)
-        lh = logging.FileHandler(join(gettempdir(), "pypandora_debugging.log"))
-        lh.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        debug_logger.addHandler(lh)
 
 
     
