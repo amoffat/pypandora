@@ -256,6 +256,11 @@
 				z-index:20;
 			}
 			
+			#share_links {
+
+				bottom:15px;
+				right:100px;
+			}
 			
 		</style>
 	</head>
@@ -332,6 +337,19 @@
 			</ul>
 		</div>
 		
+		<div id="share_links">
+			<!-- AddThis Button BEGIN -->
+			<div class="addthis_toolbox addthis_default_style ">
+			<a class="addthis_button_reddit"></a>
+			<a class="addthis_button_hackernews"></a>
+			<a class="addthis_button_slashdot"></a>
+			<a class="addthis_button_twitter"></a>
+			<a class="addthis_button_email"></a>
+			<a class="addthis_button_compact"></a>
+			</div>
+			<!-- AddThis Button END -->
+		</div>
+		
         
         <script type="text/javascript">
         	var current_song = null;
@@ -339,6 +357,12 @@
         	var overlay_interval = null;
         	var player_ready = false;
         	var initial_volume_set = true;
+        	
+        	
+        	var addthis_share = {
+       			url: "https://github.com/amoffat/pypandora",
+       			title: "PyPandora"
+        	};
         
         	function long_poll() {
         		$.get("/events", function(data) {
@@ -494,7 +518,9 @@
         	}
         	
         	
-        	$(function() {      
+        	$(function() {   
+        		addthis.init();
+        		
         		center("#overlay");
         		center("#login_container");
         		
@@ -606,6 +632,8 @@
         		//long_poll();
         	});
         </script>
+        
+        <script type="text/javascript" src="http://s7.addthis.com/js/250/addthis_widget.js#pubid=ra-4eb098cb231165f0&async=1"></script>
         
     </body>
 </html>

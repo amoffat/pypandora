@@ -47,9 +47,9 @@ settings = {
     'username': 'andrew.moffat@medtelligent.com',
     'download_directory': '/tmp',
     'download_music': False,
-    'volume': 47,
+    'volume': 21,
     'tag_mp3s': False,
-    'last_station': '539705826868328276',
+    'last_station': '501449977637238612',
     'password': 'lL1nRMx8yc',
 }
 
@@ -1687,7 +1687,7 @@ class SocketReactor(object):
                 except:
                     self.log.exception("error in callbacks")
             
-            time.sleep(.001)
+            time.sleep(.005)
             
 
 
