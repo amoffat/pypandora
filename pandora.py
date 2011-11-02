@@ -270,8 +270,11 @@ class Account(object):
         
         
         def song_changer():
+            sd = self.reactor.shared_data
+            
             if self.current_song and self.current_song.done_playing:
                 self.current_station.next()
+                sd["message"] = ["refresh_song"]
                 
         self.reactor.add_callback(song_changer)
         
@@ -1530,7 +1533,7 @@ class WebConnection(object):
             
         # long-polling requests
         elif self.path == "/events":
-            shared_data["long_pollers"].append(self)
+            shared_data["long_pollers"].add(self)
             return
             
         elif self.path == "/connection_info":
@@ -1726,7 +1729,7 @@ class WebServer(object):
                 for poller in sd["long_pollers"]:
                     poller.send_json({"event": sd["message"]})
                     
-                sd["long_pollers"] = []
+                sd["long_pollers"].clear()
                 sd["message"] = None
         
         self.reactor.add_callback(long_poll_writer)
@@ -1841,7 +1844,7 @@ if __name__ == "__main__":
     # music from pandora uses this same key to dump to
     shared_data = {
         "music_buffer": Queue(music_buffer_size),
-        "long_pollers": [],
+        "long_pollers": set(),
         "message": None,
         "pandora_account": None
     }
