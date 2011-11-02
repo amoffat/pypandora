@@ -103,6 +103,9 @@
 			#credits ul {
 				padding-left:0;
 			}
+			#credits li {
+				list-style-type:none;
+			}
 			
 			#credits a {
 				color: #9ee2ff;
@@ -256,12 +259,6 @@
 				z-index:20;
 			}
 			
-			#share_links {
-
-				bottom:15px;
-				right:100px;
-			}
-			
 		</style>
 	</head>
 	
@@ -334,21 +331,25 @@
 					<a target="_blank" href="http://jqueryui.com/">jQuery UI</a>, and
 					<a target="_blank" href="http://jplayer.org/">jPlayer</a>
 				</li>
+				
+				<li>
+					<div style="padding-top:10px;">
+						<!-- AddThis Button BEGIN -->
+						<div class="addthis_toolbox addthis_default_style ">
+						<a class="addthis_button_reddit"></a>
+						<a class="addthis_button_hackernews"></a>
+						<a class="addthis_button_slashdot"></a>
+						<a class="addthis_button_twitter"></a>
+						<a class="addthis_button_google_plusone" g:plusone:count="false"></a>
+						<a class="addthis_button_compact"></a>
+						</div>
+						<!-- AddThis Button END -->
+					</div>
+				</li>
 			</ul>
 		</div>
 		
-		<div id="share_links">
-			<!-- AddThis Button BEGIN -->
-			<div class="addthis_toolbox addthis_default_style ">
-			<a class="addthis_button_reddit"></a>
-			<a class="addthis_button_hackernews"></a>
-			<a class="addthis_button_slashdot"></a>
-			<a class="addthis_button_twitter"></a>
-			<a class="addthis_button_email"></a>
-			<a class="addthis_button_compact"></a>
-			</div>
-			<!-- AddThis Button END -->
-		</div>
+
 		
         
         <script type="text/javascript">

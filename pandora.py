@@ -44,13 +44,13 @@ import_export_html_filename = "index.html"
 
 # settings
 settings = {
-    'username': 'andrew.moffat@medtelligent.com',
+    'username': None,
     'download_directory': '/tmp',
     'download_music': False,
-    'volume': 21,
+    'volume': 60,
     'tag_mp3s': False,
-    'last_station': '501449977637238612',
-    'password': 'lL1nRMx8yc',
+    'last_station': None,
+    'password': None,
 }
 
 
