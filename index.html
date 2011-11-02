@@ -366,9 +366,26 @@
         	};
         
         	function long_poll() {
-        		$.get("/events", function(data) {
-        			console.log(data);
-        		});
+        		$.ajax({
+        			url: "/events",
+        			success: function(data) {
+        				var action = data.event[0];
+        				var args = data.event[1];
+        				
+        				switch (action) {
+        				case "refresh_song":
+        					song_info();
+        					break;
+        				case "update_volume":
+        					break;
+        				}
+            			setTimeout(long_poll, 10); 
+            		},
+            		error: function() {
+            			// don't poll too quickly
+            			setTimeout(long_poll, 500);
+            		}
+        		})
         	}
         
         	function control(method, data, success) {
@@ -573,6 +590,7 @@
         				remember_login: r
 					}, function(data) {
 						if (data.status) {
+							account_info();
 							overlay_hide(function() {
 								overlay_show("Buffering");
 							});
@@ -626,11 +644,14 @@
         		
         		
         		$.get("/connection_info", function(data) {
-        			if (data.logged_in) {overlay_show("Buffering");}
+        			if (data.logged_in) {
+        				overlay_show("Buffering");
+        				account_info();
+        			}
         			else {login_show();}
         		});
         		
-        		//long_poll();
+        		long_poll();
         	});
         </script>
         
