@@ -44,13 +44,13 @@ import_export_html_filename = "index.html"
 
 # settings
 settings = {
-    'username': None,
+    'username': 'andrew.robert.moffat@gmail.com',
     'download_directory': '/tmp',
     'download_music': False,
-    'volume': 60,
+    'volume': 0,
     'tag_mp3s': False,
-    'last_station': None,
-    'password': None,
+    'last_station': '313238373088317307',
+    'password': '1D5U90TU',
 }
 
 
@@ -295,6 +295,18 @@ class Account(object):
     def next(self):
         if self.current_station: self.current_station.next()
         
+    def like(self):
+        if self.current_song:
+            self.current_song.like()
+            return True
+        return False   
+        
+    def dislike(self):
+        if self.current_song:
+            self.current_song.dislike()
+            self.next()
+            return True
+        return False   
         
     def play(self, station_id):
         if self.current_station: self.current_station.stop()
@@ -413,6 +425,7 @@ class Station(object):
         self.current_song.play()
             
     def next(self):
+        self.account.reactor.shared_data["message"] = ["refresh_song"]
         self.play()
     
     @property
@@ -486,6 +499,9 @@ class Song(object):
 
         self.__dict__.update(kwargs)
         #pprint(self.__dict__)
+        if self.rating is not None:
+            print repr(self.rating)
+            exit() 
         
         self.seed = self.userSeed
         self.id = self.musicId
@@ -714,7 +730,11 @@ class Song(object):
                 self.download_progress > Song.kb_to_quick_stream * 1024: return
             
             self.last_read = now
-            status, chunk = self.sock.read(Song.read_chunk_size, only_chunks=True)
+            try: status, chunk = self.sock.read(Song.read_chunk_size, only_chunks=True)
+            except:
+                self.log.exception("error downloading chunk")
+                self.connect()
+                return
             
             if status is MagicSocket.BLOCKING: return
             
@@ -1553,7 +1573,6 @@ class WebConnection(object):
         elif self.path.startswith("/control/"):            
             command = self.path.replace("/control/", "")
             if command == "next_song":
-                shared_data["message"] = ["refresh_song"]
                 shared_data["music_buffer"] = Queue(music_buffer_size)
                 pandora.next()
                 self.send_json({"status": True})
@@ -1574,6 +1593,9 @@ class WebConnection(object):
                 
                 self.send_json({"status": success})
                 
+            elif command == "like_song":
+                pandora.like()
+                self.send_json({"status": True})
                 
             elif command == "change_station":
                 station_id = self.params["station_id"];
@@ -1590,6 +1612,10 @@ class WebConnection(object):
                 shared_data["message"] = ["update_volume", level] 
             
                 self.send_json({"status": True})
+                
+            else:
+                self.send_json({"status": False})
+                
            
         # this request is special in that it should never close after writing
         # because it's a stream

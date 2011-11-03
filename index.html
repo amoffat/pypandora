@@ -462,6 +462,12 @@
         		restart_music();
         	}
         	
+        	function like_song() {
+        		overlay_show("Liking song");
+        		control("like_song");
+        		setTimeout(overlay_hide, 1000);
+        	}
+        	
         	function change_song() {
        			overlay_show("Changing song");
        			control("next_song");
@@ -607,7 +613,7 @@
         		});
         		
         		$("#next").click(change_song);        		
-        		$("#like").click(song_info);
+        		$("#like").click(like_song);
         		
         		$("#stations").click(function() {
         			if (current_station != $(this).val()) {
