@@ -19,7 +19,7 @@
 		h1 { font-size: 3.8em; color: #224bb4; margin-bottom: 3px; }
 		h1 .small { font-size: 0.4em; }
 		h1 a { text-decoration: none }
-		h2 { font-size: 1.5em; color: #224bb4; }
+		h2 { font-size: 1.5em; color: #224bb4; margin:40px 0 0px 0;}
 		h3 { text-align: center; color: #224bb4; }
 		a { color: #224bb4; }
 		.description { font-size: 1.2em; margin-bottom: 30px; margin-top: 30px; font-style: italic;}
@@ -51,7 +51,7 @@
 		
 		
 			<h1>
-				<a href="https://github.com/amoffat/pypandora">pypandora</a>
+				<a href="https://github.com/amoffat/pypandora">PyPandora</a>
 			  	<span class="small">by <a href="https://github.com/amoffat">amoffat</a></span>
 			</h1>
 
@@ -62,35 +62,90 @@
  
 <h2>Screenshot</h2>
 <p>
-	<a href="http://i.imgur.com/1n1og.png"><img src="http://i.imgur.com/1n1ogs.png" /></a>
+	<a href="http://i.imgur.com/1n1og.png"><img src="http://i.imgur.com/1n1ogl.png" style="width:300px;" /></a>
+</p>
+
+
+<h2>Why?</h2>
+<p>
+	My coworkers and I have a single music server that plays Pandora Radio in the
+	office.  We wanted the ability to control it from our desks without getting up :)
 </p>
  
    <h2>Dependencies</h2>
-   <p>None! (aside from Python > 2.5 and a modern web browser :)</p>
- 
+   <p>Web browser, Python &gt; 2.5</p>
+
 
  
+<h2>Code Features</h2>
+<p>
+	<ul>
+		<li>Ad-hoc Pandora API</li>
+		<li>
+			Mini single-threaded non-blocking webserver from scratch
+			<ul>
+				<li>long polling (comet)</li>
+				<li>real-time audio streaming</li>
+			</ul>
+		</li>
+		<li>ID3 tagging</li>
+		<li>Self-modifying code</li>
+	</ul>
+</p>
 
  
-
- 
-   <h2>Authors</h2>
+   <h2>Author</h2>
    <p>
        Andrew Moffat (andrew.robert.moffat@gmail.com)</p>
  
 
  <h2>Download</h2>
  <p>
-   <a href="https://raw.github.com/amoffat/pypandora/master/pandora.py">pypandora.py</a>
+   <a href="https://raw.github.com/amoffat/pypandora/master/pypandora.py">pypandora.py</a>
  </p>
  
  
- 
- 
- <p>You can also clone the project with <a href="http://git-scm.com">Git</a>
-   by running:
-   <pre>$ git clone git://github.com/amoffat/pypandora</pre>
+ <h2>Running</h2>
+ <p>
+ 	<pre>$ python pypandora.py</pre>
+ 	Enjoy!  Report any bugs to the <a href="https://github.com/amoffat/pypandora/issues">project page.</a>
  </p>
+ 
+ 
+<hr style="margin:60px auto;"/>
+
+<h2>Extending the UI</h2>
+<p>
+	Most people will probably want to tweak the html interface.  To do that,
+	you should know a few things: the html is embedded in pypandora.py, in the variable name
+	"html_page".  It's zlib.compressed and base64.b64encoded to save space.
+	Fortunately, getting it out is easy (that's what she said).  Just run:
+	
+	<pre>$ python pypandora.py --export</pre>
+	
+	to export the html to index.html locally.  You can then use this file
+	as a base to make your changes.  When you run pypandora, if it sees an
+	index.html in its own directory, it will use that instead of the html_page
+	variable.  If you want to re-embed your index.html page back into pypandora.py,
+	just run:
+	
+	<pre>$ python pypandora.py --import</pre>
+	
+	and pypandora will slurp up index.html, zlib.compress and base64 encode it,
+	and embed it in pypandora.py
+</p>
+ 
+ 
+<h2>Re-distributing (IMPORTANT)</h2>
+<p>
+	If you choose to re-distribute pypandora, PLEASE run the following command
+	before doing so:
+	
+	<pre>$ python pypandora.py --clean</pre>
+	
+	This will clean out your saved settings from pypandora (like your login
+	info!)  You really don't want to be sharing that stuff with everyone.
+</p>
 
  <div class="footer">
    get the source code on GitHub : <a href="https://github.com/amoffat/pypandora">amoffat/pypandora</a>
