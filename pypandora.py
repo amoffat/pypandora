@@ -565,6 +565,13 @@ class Song(object):
         self.started_streaming = None
         self.sock = None
         self.bitrate = None
+        
+        
+        # these are used to prevent .done_playing from reporting too early in
+        # the case where we've closed the browser window (and are therefore not
+        # streaming audio out of the buffer)
+        self._done_playing_offset = 0
+        self._done_playing_marker = 0
 
         def format_title(part):
             part = part.lower()
@@ -609,13 +616,13 @@ class Song(object):
         return self.duration * self.download_progress / float(self.song_size)
     
     @property
-    def play_progress(self):
-        now = time.time()
-        return 100 * self.position / self.duration
-    
-    @property
     def done_playing(self):
-        return self.started_streaming and self.duration and self.started_streaming + self.duration <= time.time()
+        # never finish playing if we're not actually pushing data through out
+        # to the audio player
+        if self._done_playing_marker: return False
+        
+        return self.started_streaming and self.duration\
+            and self.started_streaming + self.duration + self._done_playing_offset <= time.time()
     
     @property
     def done_downloading(self):
@@ -646,7 +653,7 @@ class Song(object):
         # want the old socket laying around, open, and in the reactor
         self.stop()
         
-        self.log.info("downloading")
+        self.log.info("downloading from byte", self.download_progress)
         
         split = urlsplit(self.url)
         host = split.netloc
@@ -733,7 +740,7 @@ class Song(object):
                     # determine the size of the song, and from that, how long the
                     # song is in seconds
                     self.song_size = int(headers["Content-Length"])
-                    self.duration = self.song_size / bytes_per_second
+                    self.duration = (self.song_size / bytes_per_second) + 1
                     self.started_streaming = time.time()
                     self._mp3_data = []
                 
@@ -743,7 +750,17 @@ class Song(object):
 
         elif self.state is Song.STREAMING:            
             # can we even put anything new on the music buffer?
-            if shared_data["music_buffer"].full(): return
+            if shared_data["music_buffer"].full():
+                if not self._done_playing_marker:
+                    self._done_playing_marker = time.time()
+                return
+            
+            # it's time to aggregate the time that we sat essentially paused
+            # and add it to the offset.  the offset is used to adjust the
+            # time calculations to determine if we're done playing the song
+            if self._done_playing_marker:
+                self._done_playing_offset += time.time() - self._done_playing_marker
+                self._done_playing_marker = 0
             
             # check if it's time to read more music yet.  preload the
             # first N kilobytes quickly so songs play immediately
@@ -774,7 +791,7 @@ class Song(object):
                         
                         bytes_per_second = self.bitrate * 125.0
                         self.sleep_amt = Song.read_chunk_size * .8 / bytes_per_second
-                        self.duration = self.song_size / bytes_per_second
+                        self.duration = (self.song_size / bytes_per_second) + 1
                     
                     
                 self.download_progress += len(chunk)
