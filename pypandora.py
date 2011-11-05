@@ -1815,11 +1815,11 @@ class WebServer(object):
 
 if __name__ == "__main__":
     parser = OptionParser(usage=("%prog [options]"))
-    parser.add_option('-i', '--import', dest='import_html', action="store_true", default=False, help="Import index.html into pandora.py")
-    parser.add_option('-e', '--export', dest='export_html', action="store_true", default=False, help="Export index.html from pandora.py")
-    parser.add_option('-c', '--clean', dest='clean', action="store_true", default=False, help="Remove all account-specific details from the player")
-    parser.add_option('-p', '--port', type="int", dest='port', default=7000, help="the port to serve on")
-    parser.add_option('-d', '--debug', dest='debug', action="store_true", default=False, help='debug XML to/from Pandora')
+    parser.add_option('-i', '--import', dest='import_html', action="store_true", default=False, help="Import index.html into pandora.py.  See http://amoffat.github.com/pypandora/#extending")
+    parser.add_option('-e', '--export', dest='export_html', action="store_true", default=False, help="Export index.html from pandora.py.  See http://amoffat.github.com/pypandora/#extending")
+    parser.add_option('-c', '--clean', dest='clean', action="store_true", default=False, help="Remove all account-specific details from the player.  See http://amoffat.github.com/pypandora/#distributing")
+    parser.add_option('-p', '--port', type="int", dest='port', default=7000, help="The port to serve on")
+    parser.add_option('-d', '--debug', dest='debug', action="store_true", default=False, help='Enable debug logging')
     options, args = parser.parse_args()
     
     
