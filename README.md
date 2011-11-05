@@ -2,9 +2,8 @@ PyPandora is a cross-platform Pandora Radio player in a single python script.
 
 http://amoffat.github.com/pypandora
 
-![Screenshot](http://i.imgur.com/1n1og.png)
+*Quickstart:*
 
-Quickstart:
-```bash
-$ python pypandora.py
-```
+    $ python pypandora.py
+
+![Screenshot](http://i.imgur.com/BiPVB.jpg)
