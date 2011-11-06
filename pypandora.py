@@ -70,7 +70,7 @@ settings = {
     'download_directory': '/tmp',
     'download_music': False,
     'volume': 60,
-    'tag_mp3s': False,
+    'tag_mp3s': True,
     'last_station': None,
     'password': None,
 }
@@ -1900,7 +1900,8 @@ if __name__ == "__main__":
             "password": None,
             "last_station": None,
             "volume": 60,
-            "download_music": False
+            "download_music": False,
+            "tag_mp3s": True
         })
         exit()
 
