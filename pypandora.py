@@ -318,17 +318,10 @@ class Account(object):
         if self.current_station: self.current_station.next()
         
     def like(self):
-        if self.current_song:
-            self.current_song.like()
-            return True
-        return False   
+        if self.current_station: self.current_station.like()
         
     def dislike(self):
-        if self.current_song:
-            self.current_song.dislike()
-            self.next()
-            return True
-        return False   
+        if self.current_station: self.current_station.dislike()
         
     def play(self, station_id):
         if self.current_station: self.current_station.stop()
@@ -877,11 +870,10 @@ class Song(object):
         self.liked = True
         self._add_feedback(like=True)
 
-    def dislike(self, **kwargs):
+    def dislike(self):
         self.log.info("disliking")
         self.liked = False
         self._add_feedback(like=False)
-        return self.station.next(**kwargs)
 
     def __repr__(self):
         return "<Song \"%s\" by \"%s\">" % (self.title, self.artist)
