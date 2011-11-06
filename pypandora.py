@@ -481,8 +481,14 @@ class Station(object):
 
             for el in xml.findall("params/param/value/array/data/value"):
                 for member in el.findall("struct/member"):
-                    c = member.getchildren()
-                    song_params[c[0].text] = c[1].text
+                    key = member[0].text
+                    value = member[1]
+                    
+                    number = value.find("int")
+                    if number is not None: value = int(number.text)
+                    else: value = value.text
+                     
+                    song_params[key] = value
                 song = Song(self, **song_params)
                 self._playlist.append(song)
 
@@ -521,9 +527,6 @@ class Song(object):
 
         self.__dict__.update(kwargs)
         #pprint(self.__dict__)
-        if self.rating is not None:
-            print repr(self.rating)
-            exit() 
         
         self.seed = self.userSeed
         self.id = self.musicId
@@ -599,6 +602,7 @@ class Song(object):
             "purchase_amazon": self.purchase_amazon,
             "gain": self.gain,
             "duration": self.duration,
+            "rating": self.rating,
         }
         
 
@@ -653,7 +657,7 @@ class Song(object):
         # want the old socket laying around, open, and in the reactor
         self.stop()
         
-        self.log.info("downloading from byte", self.download_progress)
+        self.log.info("downloading from byte %d", self.download_progress)
         
         split = urlsplit(self.url)
         host = split.netloc
@@ -1814,8 +1818,6 @@ class WebServer(object):
             
             
             
-
-
 
 
 
