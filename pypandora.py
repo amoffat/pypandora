@@ -1581,6 +1581,11 @@ class WebConnection(object):
                     self.close()
                     reactor.remove_all(self)
                     return
+                else:
+                    self.log.exception("socket exception")
+                    self.close()
+                    reactor.remove_all(self)
+                    return
             
             if done:
                 self.writing = False
