@@ -1354,7 +1354,7 @@ html_page = zlib.decompress(b64decode(html_page.replace("\n", "")))
 
 
 
-
+# i wish they had a CDN :)
 jplayer_swf = """
 eNoBBCH73kNXUwu3QAAAeNq1ewd4HEWycNfs7PTuKq3WtmzLgQVkyWEtOREsbIOQVglJKxQAGxRGuzOa
 tVe7YoNsc8CRTM7BZDAmHOmAI3OJOy5xAViZw1zijks+LqcXLrw7vaqemQ2y/d733vt/fVRPVXd1dXVV
@@ -1502,7 +1502,7 @@ fUSQ
 jplayer_swf = zlib.decompress(b64decode(jplayer_swf.replace("\n", "")))
 
 
-
+# i wish they had a CDN :)
 jplayer_js = """
 eNrVPX932zaS/+tT0Lw9h6xoSmqz3Z4UVi910016iZ2Lk9zdc3x+EAlJTCRRJSm7Plvf/WbwgwRIkJKc
 du+u7zUWgQEwGAwGM8Bg0PumY31jfX67IHc0td4uNrN4ZU2T1Pr8bxua3lm/khtyEabxOrdex5OUpHcI
