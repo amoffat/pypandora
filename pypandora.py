@@ -1896,7 +1896,7 @@ class WebConnection(object):
             
             if self.close_after_writing:
                 self.log.info("streaming music")
-                self.sock.write_string("HTTP/1.1 200 OK\r\n\r\n")
+                self.sock.write_string("HTTP/1.1 200 OK\r\nContent-Type: audio/mp3\r\n\r\n")
             
             self.sock.write_string(chunk)
             self.close_after_writing = False
