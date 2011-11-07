@@ -8,4 +8,4 @@ Quickstart:
 
 Result:
 
-![Screenshot](http://i.imgur.com/BiPVB.jpg)
+![Screenshot](http://i.imgur.com/Vo3kE.jpg)
