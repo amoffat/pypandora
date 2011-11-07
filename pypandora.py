@@ -275,9 +275,8 @@ HD7eAIijTD8="""
             "email": xml_escape(email),
             "password": xml_escape(password)
         })
-        # we use a copy because do some del operations on the dictionary
-        # from within send
-        xml = self.send(get.copy(), body)
+        
+        xml = self.send(get, body)
         
         for el in xml.findall("params/param/value/struct/member"):
             children = el.getchildren()
@@ -286,7 +285,7 @@ HD7eAIijTD8="""
             elif children[0].text == "listenerId":
                 self.lid = children[1].text	
 
-        if self.lid: return True        
+        if self.lid: return True       
         return False
 
 
@@ -359,7 +358,11 @@ class Account(object):
         logged_in = False
         for i in xrange(3):
             self.connection.sync()
-            if self.connection.authenticate(self.email, self.password):
+            
+            try: success = self.connection.authenticate(self.email, self.password)
+            except PandoraException, p: success = False
+                
+            if success:
                 logged_in = True
                 break
             else:
@@ -490,7 +493,11 @@ class Station(object):
                 "station_id": self.id,
                 "format": format
             })
-            xml = self.account.connection.send(get, body)
+            try: xml = self.account.connection.send(get, body)
+            # pick a new station
+            except PandoraException, e:
+                if "PLAYLIST_END" in str(e): raise
+                raise
 
             song_params = {}
 
