@@ -118,9 +118,6 @@ class Connection(object):
     """
     Handles all the direct communication to Pandora's servers
     """
-    _pandora_host = "www.pandora.com"
-    _pandora_port = 80
-    _pandora_rpc_path = "/radio/xmlrpc/v%d" % settings["pandora_protocol_version"]
     
     _templates = {
         "sync": """
@@ -160,22 +157,23 @@ HD7eAIijTD8="""
         return el.toprettyxml(indent="  ")
 
 
-    def send(self, get_data, body=None):        
-        conn = httplib.HTTPConnection("%s:%d" % (self._pandora_host, self._pandora_port))
+    def send(self, get_data, body, sync_on_error=True):   
+        conn = httplib.HTTPConnection("www.pandora.com", 80)
 
         headers = {"Content-Type": "text/xml"}
+        get_data_copy = get_data.copy()
 
         # pandora has a very specific way that the get params have to be ordered
         # otherwise we'll get a 500 error.  so this orders them correctly.
         ordered = []
         ordered.append(("rid", self.rid))
 
-        if "lid" in get_data:
-            ordered.append(("lid", get_data["lid"]))
-            del get_data["lid"]
+        if "lid" in get_data_copy:
+            ordered.append(("lid", get_data_copy["lid"]))
+            del get_data_copy["lid"]
 
-        ordered.append(("method", get_data["method"]))
-        del get_data["method"]
+        ordered.append(("method", get_data_copy["method"]))
+        del get_data_copy["method"]
 
         def sort_fn(item):
             k, v = item
@@ -183,20 +181,21 @@ HD7eAIijTD8="""
             if not m: return k
             else: return int(m.group(0))
 
-        kv = [(k, v) for k,v in get_data.iteritems()]
+        kv = [(k, v) for k,v in get_data_copy.iteritems()]
         kv.sort(key=sort_fn)
         ordered.extend(kv)
 
 
-        url = "%s?%s" % (self._pandora_rpc_path, urllib.urlencode(ordered))
+        
+        url = "/radio/xmlrpc/v%d?%s" % (settings["pandora_protocol_version"], urllib.urlencode(ordered))
 
         self.log.debug("talking to %s", url)
 
         # debug logging?
         self.log.debug("sending data %s" % self.dump_xml(body))
 
-        body = encrypt(body)
-        conn.request("POST", url, body, headers)
+        send_body = encrypt(body)
+        conn.request("POST", url, send_body, headers)
         resp = conn.getresponse()
 
         if resp.status != 200: raise Exception(resp.reason)
@@ -210,7 +209,7 @@ HD7eAIijTD8="""
 
         xml = ElementTree.fromstring(ret_data)
         fault = xml.find("fault/value/struct")
-        if fault:
+        if fault is not None:
             fault_data = {}
             for member in fault.findall("member"):
                 name = member.find("name").text
@@ -223,9 +222,11 @@ HD7eAIijTD8="""
                 fault_data[name] = value
                 
             fault = fault_data.get("faultString", "Unknown error from Pandora Radio")
-            if "INCOMPATIBLE_VERSION" in fault:
-                update_pandora_version()
-                return self.send(get_data, body)
+            if sync_on_error and "INCOMPATIBLE_VERSION" in fault:
+                self.log.error("got 'incompatible version' from pandora! emergency sync")
+                # sync out protocol version, our keys, and try again
+                sync_everything()
+                return self.send(get_data, body, sync_on_error=False)
             else:
                 raise PandoraException, fault
         return xml
@@ -1775,7 +1776,7 @@ class WebConnection(object):
             try: done = self.sock.write()
             except socket.error, err:
                 if err.errno in (errno.ECONNRESET, errno.EPIPE):
-                    self.log.error("peer closed connection")
+                    self.log.info("peer closed connection")
                     self.close()
                     reactor.remove_all(self)
                     return
@@ -2073,7 +2074,7 @@ def sync_everything():
     conn.request("GET", "/pypandora/")
     github_page = conn.getresponse().read()
     
-    m = re.search("SYNC START(.*?)SYNC END", github_page)
+    m = re.search("SYNC START(.*?)SYNC END", github_page, re.S | re.M)
     if not m: raise Exception, "problem syncing, fatal"
     
     sync = m.group(1)
