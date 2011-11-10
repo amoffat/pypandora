@@ -441,7 +441,7 @@ class Station(object):
         self.current_song = None
         self._playlist = []
         
-        self.log = logging.getLogger(str(self).encode("ascii", "ignore"))
+        self.log = logging.getLogger(repr(self))
 
     def like(self):
         # normally we might do some logging here, but we let the song object
@@ -615,9 +615,7 @@ class Song(object):
             return part
 
         self.filename = join(settings["download_directory"], "%s-%s.mp3" % (format_title(self.artist), format_title(self.title)))
-        
-        # FIXME: bug if the song has weird characters
-        self.log = logging.getLogger(str(self).encode("ascii", "ignore"))
+        self.log = logging.getLogger(repr(self))
         
         
         
@@ -913,7 +911,7 @@ class Song(object):
         self._add_feedback(like=False)
 
     def __repr__(self):
-        return "<Song \"%s\" by \"%s\">" % (self.title, self.artist)
+        return "<Song \"%s\" by \"%s\">" % (self.title.encode("ascii", "ignore"), self.artist.encode("ascii", "ignore"))
 
 
 
