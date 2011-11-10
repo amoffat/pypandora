@@ -855,7 +855,8 @@ class Song(object):
                         # save on memory
                         self._mp3_data = []
                         
-                        if settings["tag_mp3s"]:
+                        # FIXME, id3 tags appear to be broken, disabling manually
+                        if settings["tag_mp3s"] and 0:
                             # tag the mp3
                             tag = ID3Tag()
                             tag.add_id(self.id)
@@ -864,6 +865,8 @@ class Song(object):
                             tag.add_artist(self.artist)
                             # can't get this working...
                             #tag.add_image(self.album_art)
+                            
+                            print "\n\n", repr(tag.binary()), "\n\n"
                             
                             mp3_data = tag.binary() + mp3_data
                 
