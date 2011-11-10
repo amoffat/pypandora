@@ -533,7 +533,7 @@ class Station(object):
         return self._playlist
 
     def __repr__(self):
-        return "<Station %s: \"%s\">" % (self.id, self.name)
+        return "<Station %s: \"%s\">" % (self.id, self.name.encode("ascii", "ignore"))
 
 
 
