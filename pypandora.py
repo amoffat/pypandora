@@ -871,7 +871,7 @@ class Song(object):
                             mp3_data = tag.binary() + mp3_data
                 
                         # and write it to the file
-                        h = open(self.filename, "w")
+                        h = open(self.filename, "wb")
                         h.write(mp3_data)
                         h.close()
                     
