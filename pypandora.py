@@ -142,11 +142,8 @@ vFEIu76TsFMjK7V+Ynv8pCIccpwpk2idDhcKn7L10VxnXrjwMiN8PUINoXbPiFr2cSpUenNEqPYPgv0g
 HD7eAIijTD8="""
     }
 
-    def __init__(self):
-        self.rid = "%07dP" % (time.time() % 10000000) # route id
-        self.timeoffset = time.time()
-        self.token = None
-        self.lid = None # listener id
+    def __init__(self, account):
+        self.account = account
         self.log = logging.getLogger("pandora")
 
     @staticmethod
@@ -157,7 +154,7 @@ HD7eAIijTD8="""
         return el.toprettyxml(indent="  ")
 
 
-    def send(self, get_data, body, sync_on_error=True):
+    def send(self, get_data, body, sync_on_error=True, login_on_token_fail=True):
         authenticating = get_data["method"] == "authenticateListener"
         
         
@@ -235,6 +232,10 @@ HD7eAIijTD8="""
                 # sync out protocol version, our keys, and try again
                 sync_everything()
                 return self.send(get_data, body, sync_on_error=False)
+            elif login_on_token_fail and "AUTH_INVALID_TOKEN" in fault:
+                self.log.error("auth token has expired")
+                self.account.login()
+                return self.send(get_data, body, login_on_token_fail=False)
             else:
                 raise PandoraException, fault
         return xml
@@ -250,6 +251,11 @@ HD7eAIijTD8="""
         """ synchronizes the times between our clock and pandora's servers by
         recording the timeoffset value, so that for every call made to Pandora,
         we can specify the correct time of their servers in our call """
+        
+        self.rid = "%07dP" % (time.time() % 10000000) # route id
+        self.timeoffset = time.time()
+        self.token = None
+        self.lid = None # listener id
         
         self.log.info("syncing time")
         get = {"method": "sync"}
@@ -307,7 +313,7 @@ class Account(object):
         self.reactor.shared_data["pandora_account"] = self
         
         self.log = logging.getLogger("account %s" % email)
-        self.connection = Connection()        
+        self.connection = Connection(self)        
         self.email = email
         self.password = password
         self._stations = {}
@@ -374,7 +380,7 @@ class Account(object):
                 logged_in = True
                 break
             else:
-                self.log.error("failed login (this happens quite a bit), trying again...")
+                self.log.error("failed login (%s), trying again...", p)
                 time.sleep(1)
         if not logged_in:
             self.reactor.shared_data["pandora_account"] = None
