@@ -164,18 +164,18 @@ HD7eAIijTD8="""
     def send(self, get_data, body, sync_on_error=True):
         authenticating = get_data["method"] == "authenticateListener"
 
-        pandURL = 'www.pandora.com'
+        pandora_domain = "www.pandora.com"
         if authenticating:
             if settings['https_proxy']:
                 conn = httplib.HTTPSConnection(settings['https_proxy'], settings['https_proxy_port'])
             else:
-                conn = httplib.HTTPSConnection(pandURL)
+                conn = httplib.HTTPSConnection(pandora_domain)
                 #method = "GET"
         else:
             if settings['http_proxy']:
                 conn = httplib.HTTPConnection(settings['http_proxy'], settings['http_proxy_port'])
             else:
-                conn = httplib.HTTPConnection(pandURL)
+                conn = httplib.HTTPConnection(pandora_domain)
                 #method = "POST"
 
         headers = {"Content-Type": "text/xml"}
@@ -204,23 +204,23 @@ HD7eAIijTD8="""
         ordered.extend(kv)
 
 
-        if authenticating and 0: url = "/radio/jsonp"
-        else: url = "/radio/xmlrpc/v%d?%s" % (settings["pandora_protocol_version"], urllib.urlencode(ordered))
+        if authenticating and 0: path = "/radio/jsonp"
+        else: path = "/radio/xmlrpc/v%d?%s" % (settings["pandora_protocol_version"], urllib.urlencode(ordered))
 
-        self.log.debug("talking to %s", url)
+        self.log.debug("talking to %s", path)
 
         # debug logging?
         self.log.debug("sending data %s" % self.dump_xml(body))
 
         send_body = encrypt(body)
         if authenticating and settings['https_proxy']:
-            conn.set_tunnel(pandURL, 443)
-            conn.request("POST", url, send_body, headers)
+            conn.set_tunnel(pandora_domain, 443)
+            conn.request("POST", path, send_body, headers)
         else:
             if settings['http_proxy']:
-                conn.request("POST", "http://" + pandURL + url, send_body, headers)
+                conn.request("POST", "http://" + pandora_domain + path, send_body, headers)
             else:
-                conn.request("POST", url, send_body, headers)
+                conn.request("POST", path, send_body, headers)
         resp = conn.getresponse()
 
         if resp.status != 200: raise Exception(resp.reason)
@@ -2140,7 +2140,7 @@ if __name__ == "__main__":
     parser.add_option('-i', '--import', dest='import_html', action="store_true", default=False, help="Import index.html into pandora.py.  See http://amoffat.github.com/pypandora/#extending")
     parser.add_option('-e', '--export', dest='export_html', action="store_true", default=False, help="Export index.html from pandora.py.  See http://amoffat.github.com/pypandora/#extending")
     parser.add_option('-c', '--clean', dest='clean', action="store_true", default=False, help="Remove all account-specific details from the player.  See http://amoffat.github.com/pypandora/#distributing")
-    parser.add_option('--no-browser', dest='browser', action="store_false", default=True, help="Don't start up a browser for me, I'll do it!")
+    parser.add_option('-n', '--no-browser', dest='no_browser', action="store_true", default=False, help="Don't start up a browser for me, I'll do it!")
     parser.add_option('-p', '--port', type="int", dest='port', default=7000, help="The port to serve on")
     parser.add_option('-b', '--b64', dest='encode_file', action="store", default=False, help="Zlib-compress and base64 encode an arbitrary file")
     parser.add_option('-d', '--debug', dest='debug', action="store_true", default=False, help='Enable debug logging')
@@ -2235,6 +2235,6 @@ if __name__ == "__main__":
     if username and password: Account(reactor, username, password)
     
     
-    if options.browser:
+    if not options.no_browser:
         webopen("http://localhost:%d" % options.port)
     reactor.run()
